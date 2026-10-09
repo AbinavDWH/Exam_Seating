@@ -5,10 +5,12 @@ require_admin();
 
 // Handle Exam Actions (Edit & Delete) directly from Dashboard
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $action = $_POST['action'] ?? '';
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         if ($id > 0) {
+            db()->prepare("DELETE FROM student_exams WHERE exam_id = ?")->execute([$id]);
             db()->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$id]);
             db()->prepare("UPDATE students SET exam_id = NULL WHERE exam_id = ?")->execute([$id]);
             db()->prepare("DELETE FROM exams WHERE id = ?")->execute([$id]);
@@ -17,11 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'edit') {
         $id = (int)($_POST['id'] ?? 0);
-        $name = trim($_POST['exam_name'] ?? '');
-        $date = $_POST['exam_date'] ?? '';
+        $name = trim((string)($_POST['exam_name'] ?? ''));
+        $date = (string)($_POST['exam_date'] ?? '');
         $time = $_POST['start_time'] ?: '09:30:00';
-        $sem = (int)($_POST['semester'] ?? 1);
-        $status = $_POST['status'] ?? 'upcoming';
+        $sem = max(1, min(8, (int)($_POST['semester'] ?? 1)));
+        $status = in_array($_POST['status'] ?? '', ['upcoming', 'ongoing', 'completed'], true) ? $_POST['status'] : 'upcoming';
         if ($id > 0 && $name !== '' && $date !== '') {
             db()->prepare("UPDATE exams SET exam_name = ?, exam_date = ?, start_time = ?, semester = ?, status = ? WHERE id = ?")
                 ->execute([$name, $date, $time, $sem, $status, $id]);
@@ -322,6 +324,7 @@ $cards = [
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="post" action="index.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="id" id="deleteExamId" value="">
         <div class="modal-body py-3">
@@ -352,6 +355,7 @@ $cards = [
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="post" action="index.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="edit">
         <input type="hidden" name="id" id="editExamId" value="">
         <div class="modal-body">

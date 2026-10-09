@@ -2,7 +2,7 @@
 $pageTitle = 'Generate Seating';
 require __DIR__ . '/_header.php';
 
-$exams = db()->query("SELECT e.*, (SELECT COUNT(*) FROM students s WHERE s.exam_id=e.id) AS students
+$exams = db()->query("SELECT e.*, (SELECT COUNT(DISTINCT s.id) FROM students s LEFT JOIN student_exams se ON se.student_id=s.id WHERE se.exam_id=e.id OR s.exam_id=e.id) AS students
   FROM exams e ORDER BY e.exam_date DESC")->fetchAll();
 $preselect = (int)($_GET['exam_id'] ?? 0);
 $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fetchColumn();
@@ -61,6 +61,9 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
 
       <!-- Custom Inputs Box -->
       <div id="customInputs" class="p-3 bg-light rounded-3 border mb-3" style="display:none">
+        <div class="alert alert-info py-1.5 px-2.5 small mb-2" style="font-size:11.5px">
+          ℹ️ Safe custom rooms: In simulation mode, runs in-memory. If saved, creates unique new halls without overwriting existing halls.
+        </div>
         <div class="mb-2">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label small text-muted mb-0">Number of Exam Halls (1 – 5,000+)</label>
@@ -87,6 +90,23 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
         <div id="customCalc" class="small text-muted text-center pt-1 border-top">
           Calculated Capacity: <strong>60 desks</strong> (2 rooms × 15 rows × 2 cols = 30 desks/room)
         </div>
+      </div>
+
+      <!-- Spacing and Simulation Options -->
+      <label class="form-label small fw-semibold">3. Spacing &amp; Simulation Options</label>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="spacingAlternate">
+        <label class="form-check-label small" for="spacingAlternate">
+          <strong>Alternate Empty Desks (Checkerboard)</strong><br>
+          <span class="text-muted" style="font-size:11px">Recommended for single-paper or imbalanced batches (e.g. 90/10 split) to guarantee 0 adjacent clashes.</span>
+        </label>
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="simulateOnly">
+        <label class="form-check-label small" for="simulateOnly">
+          <strong>Simulate in Memory (Preview only)</strong><br>
+          <span class="text-muted" style="font-size:11px">Calculates seating plan and checks clashes without modifying saved halls or database records.</span>
+        </label>
       </div>
 
       <button id="genBtn" class="btn btn-grad w-100 py-2.5">
@@ -122,7 +142,7 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
         <a id="exportLink" href="#" class="btn btn-outline-secondary btn-sm" style="border-radius:12px;">
           <?= svg_icon('download', 'me-1', 15) ?>Export CSV Roster
         </a>
-        <a href="http://localhost:5173/find" target="_blank" class="btn btn-outline-primary btn-sm" style="border-radius:12px;">
+        <a href="<?= htmlspecialchars(getenv('STUDENT_PORTAL_URL') ?: '../') ?>find" target="_blank" class="btn btn-outline-primary btn-sm" style="border-radius:12px;">
           <?= svg_icon('external-link', 'me-1', 15) ?>Test in Student Portal ↗
         </a>
       </div>
@@ -184,7 +204,15 @@ btn.addEventListener('click', async () => {
   }
 
   const isCustom = document.getElementById('modeCustom').checked;
-  const payload = { exam_id: +examId };
+  const isAlternate = document.getElementById('spacingAlternate').checked;
+  const isSimulate = document.getElementById('simulateOnly').checked;
+
+  const payload = {
+    exam_id: +examId,
+    spacing: isAlternate ? 'alternate' : 'dense',
+    simulate: isSimulate,
+  };
+
   if (isCustom) {
     payload.num_rooms = +document.getElementById('numRooms').value || 1;
     payload.benches_per_room = +document.getElementById('benchesPerRoom').value || 15;
@@ -195,9 +223,13 @@ btn.addEventListener('click', async () => {
   label.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Arranging conflict-free seats…';
 
   try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const res = await fetch('../api/generate.php', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken
+      },
       body: JSON.stringify(payload)
     });
     const json = await res.json();
@@ -221,13 +253,25 @@ btn.addEventListener('click', async () => {
         <div class="fw-bold fs-4" style="color:${c}">${v}</div><div class="small text-muted">${t}</div></div></div>`).join('');
     
     let w = '';
-    if (d.unassigned > 0) {
-      w += `<div class="alert alert-warning py-2 small">⚠️ ${d.unassigned.toLocaleString()} student(s) could not be seated due to capacity limits. Increase rooms or benches.</div>`;
+    if (d.simulated) {
+      w += `<div class="alert alert-info py-2 small">ℹ️ <b>Simulation Mode:</b> Seating preview generated in-memory. Database records were NOT modified. Uncheck "Simulate in Memory" to save.</div>`;
+    }
+    if (d.warnings && d.warnings.length) {
+      d.warnings.forEach(msg => {
+        w += `<div class="alert alert-warning py-2 small">${msg}</div>`;
+      });
     }
     if (sameCodeConflicts === 0) {
       w += `<div class="alert alert-success py-2 small"><b>Zero Conflicts!</b> No two adjacent students share the same exam code. Interleaved across academic years and departments.</div>`;
-    } else {
-      w += `<div class="alert alert-danger py-2 small">⚠️ ${sameCodeConflicts} adjacent conflict(s) remain due to insufficient cohort variety.</div>`;
+    } else if (!isAlternate) {
+      w += `<div class="alert alert-danger py-2 small">
+        ⚠️ <b>${sameCodeConflicts} adjacent conflict(s) detected!</b> This batch has an imbalanced paper mix or single paper.
+        <div class="mt-2">
+          <button type="button" class="btn btn-warning btn-sm" onclick="enableAlternateAndRegenerate()">
+            Enable Alternate Seating &amp; Re-run
+          </button>
+        </div>
+      </div>`;
     }
     document.getElementById('warnings').innerHTML = w;
 
@@ -243,6 +287,11 @@ btn.addEventListener('click', async () => {
   btn.disabled = false;
   label.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg> Generate Seating Plan';
 });
+
+function enableAlternateAndRegenerate() {
+  document.getElementById('spacingAlternate').checked = true;
+  document.getElementById('genBtn').click();
+}
 </script>
 
 <?php require __DIR__ . '/_footer.php'; ?>

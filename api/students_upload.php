@@ -1,48 +1,78 @@
 <?php
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
 require_admin_api();
 
 $rows = [];
-if (!empty($_FILES['file']['tmp_name'])) {                 // CSV upload
+if (!empty($_FILES['file']['tmp_name'])) {
     $fh = fopen($_FILES['file']['tmp_name'], 'r');
-    $header = fgetcsv($fh);                                 // skip header
-    while (($line = fgetcsv($fh)) !== false) {
-        if (count($line) >= 4) {
-            $rows[] = [
-                'roll_no'   => trim($line[0]),
-                'name'      => trim($line[1]),
-                'branch'    => strtoupper(trim($line[2])),
-                'semester'  => (int)$line[3],
-                'exam_id'   => isset($line[4]) && $line[4] !== '' ? (int)$line[4] : null,
-                'exam_code' => isset($line[5]) && $line[5] !== '' ? trim($line[5]) : null,
-            ];
+    if ($fh) {
+        $firstLine = fgetcsv($fh);
+        if ($firstLine !== false) {
+            // Check if first row is a header row
+            $firstCol = strtolower(trim((string)$firstLine[0]));
+            $secondCol = strtolower(trim((string)($firstLine[1] ?? '')));
+            $isHeader = str_contains($firstCol, 'roll') || str_contains($secondCol, 'name');
+
+            if (!$isHeader && count($firstLine) >= 3) {
+                // First line is actually student data!
+                $rows[] = parse_csv_student_line($firstLine);
+            }
+
+            while (($line = fgetcsv($fh)) !== false) {
+                if (count($line) >= 3) {
+                    $rows[] = parse_csv_student_line($line);
+                }
+            }
         }
+        fclose($fh);
     }
-    fclose($fh);
-} else {                                                    // JSON body
+} else {
     $in = json_decode(file_get_contents('php://input'), true);
     $rows = $in['students'] ?? [];
 }
+
+function parse_csv_student_line(array $line): array {
+    return [
+        'roll_no'   => strtoupper(trim((string)$line[0])),
+        'name'      => trim((string)$line[1]),
+        'branch'    => strtoupper(trim((string)$line[2])),
+        'semester'  => isset($line[3]) && $line[3] !== '' ? max(1, min(8, (int)$line[3])) : 1,
+        'exam_id'   => isset($line[4]) && trim((string)$line[4]) !== '' ? (int)$line[4] : null,
+        'exam_code' => isset($line[5]) && trim((string)$line[5]) !== '' ? trim((string)$line[5]) : null,
+        'dob'       => isset($line[6]) && trim((string)$line[6]) !== '' ? trim((string)$line[6]) : null,
+    ];
+}
+
 if (!$rows) {
-    json_response(['error' => 'No student rows found'], 400);
+    json_response(['error' => 'No student rows found in uploaded file'], 400);
 }
 
 $pdo = db();
 $stmt = $pdo->prepare("
-    INSERT INTO students (roll_no, name, branch, dept, semester, year, exam_code, exam_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO students (roll_no, name, dob, branch, dept, semester, year, exam_code, exam_id)
+    VALUES (?, ?, COALESCE(?, '2005-01-01'), ?, ?, ?, ?, ?, ?)
     ON CONFLICT(roll_no) DO UPDATE SET
         name = excluded.name,
+        dob = COALESCE(excluded.dob, students.dob),
         branch = excluded.branch,
         dept = excluded.dept,
         semester = excluded.semester,
         year = excluded.year,
-        exam_code = excluded.exam_code,
-        exam_id = excluded.exam_id
+        exam_code = COALESCE(NULLIF(excluded.exam_code, ''), students.exam_code, excluded.branch || '-S' || excluded.semester),
+        exam_id = COALESCE(excluded.exam_id, students.exam_id)
+");
+
+$linkStmt = $pdo->prepare("
+    INSERT INTO student_exams (student_id, exam_id, exam_code)
+    VALUES (?, ?, ?)
+    ON CONFLICT(student_id, exam_id) DO UPDATE SET
+        exam_code = COALESCE(excluded.exam_code, student_exams.exam_code)
 ");
 
 $inserted = 0;
@@ -54,29 +84,41 @@ try {
             $skipped++;
             continue;
         }
+        $roll = strtoupper(trim((string)$r['roll_no']));
+        $name = trim((string)$r['name']);
         $branch = strtoupper(trim((string)$r['branch']));
-        $sem = (int)($r['semester'] ?? 1);
+        $sem = max(1, min(8, (int)($r['semester'] ?? 1)));
         $yr = (int)ceil($sem / 2);
-        $examCode = trim((string)($r['exam_code'] ?? ''));
-        if ($examCode === '') {
-            $examCode = $branch . '-S' . $sem;
-        }
+        $dob = !empty($r['dob']) ? trim((string)$r['dob']) : null;
+        $examCode = !empty($r['exam_code']) ? trim((string)$r['exam_code']) : null;
+        $examId = !empty($r['exam_id']) ? (int)$r['exam_id'] : null;
 
         $stmt->execute([
-            trim((string)$r['roll_no']),
-            trim((string)$r['name']),
+            $roll,
+            $name,
+            $dob,
             $branch,
             $branch,
             $sem,
             $yr,
             $examCode,
-            !empty($r['exam_id']) ? (int)$r['exam_id'] : null,
+            $examId,
         ]);
+
+        if ($examId) {
+            $stuId = (int)$pdo->query("SELECT id FROM students WHERE roll_no = " . $pdo->quote($roll))->fetchColumn();
+            if ($stuId > 0) {
+                $codeForLink = $examCode ?: ($branch . '-S' . $sem);
+                $linkStmt->execute([$stuId, $examId, $codeForLink]);
+            }
+        }
         $inserted++;
     }
     $pdo->commit();
 } catch (Throwable $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     json_response(['error' => 'Upload failed: ' . $e->getMessage()], 500);
 }
 

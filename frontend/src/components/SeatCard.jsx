@@ -22,12 +22,16 @@ export default function SeatCard({ data }) {
   const [copied, setCopied] = useState(false);
 
   const copyDetails = async () => {
+    const reportingStr = data.reporting_time
+      ? `Reporting Time: ${fmtTime(data.reporting_time)} (30 mins before start)\nExam Starts: ${fmtTime(data.start_time)}`
+      : `Exam Starts: ${fmtTime(data.start_time)}`;
     const text = `🎓 UNIVERSITY EXAM SEAT PASS
 Name: ${data.name} (${data.roll_no})
 Branch: ${data.branch} · Semester ${data.semester}
 Exam Paper Code: ${data.exam_code || (data.branch + '-S' + data.semester)}
 Exam: ${data.exam_name}
-Date: ${fmtDate(data.exam_date)} at ${fmtTime(data.start_time)}
+Date: ${fmtDate(data.exam_date)}
+${reportingStr}
 Room / Hall: ${data.room_no} (${data.block})
 Desk Coordinates: Row ${data.row_num}, Column ${data.col_num} · Desk #${data.bench_no || data.row_num} (Seat ${data.seat_index || data.col_num})`;
 
@@ -113,7 +117,14 @@ Desk Coordinates: Row ${data.row_num}, Column ${data.col_num} · Desk #${data.be
           </div>
           <div className="row">
             <span className="ico">🕤</span>
-            <span>Report to hall by <b>{fmtTime(data.start_time)}</b> (sharp)</span>
+            <span>
+              Report by <b>{fmtTime(data.reporting_time || data.start_time)}</b>
+              {data.reporting_time && data.reporting_time !== data.start_time && (
+                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>
+                  (Exam starts: {fmtTime(data.start_time)})
+                </span>
+              )}
+            </span>
           </div>
           <div className="row">
             <span className="ico">📍</span>

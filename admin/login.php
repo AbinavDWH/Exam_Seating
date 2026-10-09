@@ -1,19 +1,37 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
-if (session_status() === PHP_SESSION_NONE) session_start();
-if (!empty($_SESSION['admin_id'])) { header('Location: index.php'); exit; }
+require_once __DIR__ . '/../config/auth.php';
+
+if (!empty($_SESSION['admin_id'])) {
+    header('Location: index.php');
+    exit;
+}
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $stmt = db()->prepare("SELECT * FROM admins WHERE username = ?");
-    $stmt->execute([trim($_POST['username'] ?? '')]);
-    $admin = $stmt->fetch();
-    if ($admin && password_verify($_POST['password'] ?? '', $admin['password_hash'])) {
-        $_SESSION['admin_id'] = $admin['id'];
-        $_SESSION['admin_user'] = $admin['username'];
-        header('Location: index.php'); exit;
+    verify_csrf();
+    if (!check_login_rate_limit('admin_login')) {
+        $error = 'Too many failed login attempts. Please wait 15 minutes before retrying.';
+    } else {
+        $username = trim($_POST['username'] ?? '');
+        $password = (string)($_POST['password'] ?? '');
+
+        $stmt = db()->prepare("SELECT * FROM admins WHERE username = ?");
+        $stmt->execute([$username]);
+        $admin = $stmt->fetch();
+
+        if ($admin && password_verify($password, $admin['password_hash'])) {
+            reset_login_rate_limit('admin_login');
+            session_regenerate_id(true);
+            $_SESSION['admin_id'] = $admin['id'];
+            $_SESSION['admin_user'] = $admin['username'];
+            header('Location: index.php');
+            exit;
+        }
+
+        record_failed_login('admin_login');
+        $error = 'Invalid username or password.';
     }
-    $error = 'Invalid username or password.';
 }
 ?>
 <!doctype html>
@@ -58,23 +76,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="alert alert-danger py-2 small rounded-3"><?= htmlspecialchars($error) ?></div>
   <?php endif; ?>
 
-  <form method="post">
+  <form method="post" action="login.php">
+    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
     <div class="mb-3">
       <label class="form-label small fw-semibold text-secondary">Username</label>
-      <input name="username" class="form-control" value="admin" required autofocus placeholder="Admin username">
+      <input name="username" class="form-control" required autofocus placeholder="Enter admin username" autocomplete="username">
     </div>
-    <div class="mb-3">
+    <div class="mb-4">
       <label class="form-label small fw-semibold text-secondary">Password</label>
-      <input name="password" type="password" class="form-control" value="Admin@123" required placeholder="••••••••">
-    </div>
-    <div class="p-2 mb-3 bg-light rounded-3 text-center small text-muted border">
-      Demo Credentials: <code>admin</code> &nbsp;/&nbsp; <code>Admin@123</code>
+      <input name="password" type="password" class="form-control" required placeholder="Enter password" autocomplete="current-password">
     </div>
     <button class="btn btn-grad w-100 py-2 mb-3">Sign In to Dashboard →</button>
   </form>
 
   <div class="text-center pt-2 border-top">
-    <a href="http://localhost:5173" class="text-decoration-none small text-muted fw-semibold">
+    <a href="../" class="text-decoration-none small text-muted fw-semibold">
       <i class="bi bi-arrow-left me-1"></i>Open Student Seat Finder
     </a>
   </div>

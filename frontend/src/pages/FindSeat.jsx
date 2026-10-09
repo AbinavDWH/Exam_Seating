@@ -6,7 +6,6 @@ import RoomGrid from '../components/RoomGrid.jsx';
 import { useToast } from '../components/Toast.jsx';
 
 const RECENT_KEY = 'examseat_recent';
-const SAMPLE_ROLLS = ['23CS101', '23EC101', '23ME101', '22IT101', '22AD101', '21EC301'];
 
 function ResultSkeleton() {
   return (
@@ -29,6 +28,7 @@ export default function FindSeat() {
   const [params] = useSearchParams();
   const toast = useToast();
   const [roll, setRoll] = useState(params.get('roll') || '');
+  const [dob, setDob] = useState(params.get('dob') || '');
   const [status, setStatus] = useState('idle'); // idle | loading | found | error
   const [result, setResult] = useState(null);
   const [room, setRoom] = useState(null);
@@ -42,8 +42,9 @@ export default function FindSeat() {
   });
 
   const search = useCallback(
-    async (value) => {
+    async (value, dobVal) => {
       const rollNo = String(value ?? roll).trim();
+      const currentDob = String(dobVal ?? dob).trim();
       if (!rollNo) {
         toast('🙂 Please enter your university roll number');
         return;
@@ -52,7 +53,7 @@ export default function FindSeat() {
       setResult(null);
       setRoom(null);
       try {
-        const { data } = await api.findSeat(rollNo);
+        const { data } = await api.findSeat(rollNo, null, currentDob || null);
         setResult(data);
         setStatus('found');
         setRecent((prev) => {
@@ -61,7 +62,7 @@ export default function FindSeat() {
           return next;
         });
         try {
-          const roomRes = await api.getRoom(data.room_id, data.exam_id);
+          const roomRes = await api.getRoom(data.room_id, data.exam_id, data.roll_no);
           setRoom(roomRes.data);
         } catch {
           setRoom(null);
@@ -71,14 +72,16 @@ export default function FindSeat() {
         setError(e.message);
       }
     },
-    [roll, toast]
+    [roll, dob, toast]
   );
 
   useEffect(() => {
     const r = params.get('roll');
+    const d = params.get('dob') || '';
     if (r) {
       setRoll(r);
-      search(r);
+      if (d) setDob(d);
+      search(r, d);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -91,27 +94,44 @@ export default function FindSeat() {
   return (
     <div className="container" style={{ padding: '40px 0 70px' }}>
       <div style={{ maxWidth: 660, margin: '0 auto' }} className="no-print">
-        <div className="search-card" style={{ marginTop: 0 }}>
-          <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>🔍</span>
-          <input
-            className="search-input"
-            value={roll}
-            onChange={(e) => setRoll(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && search()}
-            placeholder="Enter Roll Number… e.g. 23CS101, 22IT101"
-            aria-label="Roll number"
-            autoFocus
-          />
-          <button
-            className="btn-grad"
-            onClick={() => search()}
-            disabled={status === 'loading'}
-          >
-            {status === 'loading' ? 'Searching…' : 'Find My Seat →'}
-          </button>
+        <div className="search-card" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 10 }}>
+            <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>🔍</span>
+            <input
+              className="search-input"
+              value={roll}
+              onChange={(e) => setRoll(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && search()}
+              placeholder="Enter Roll Number… e.g. 23CS101"
+              aria-label="Roll number"
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <span style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>🎂</span>
+            <input
+              type="date"
+              className="search-input"
+              style={{ fontSize: '0.9rem', color: 'var(--text)' }}
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && search()}
+              placeholder="Date of Birth (optional verification)"
+              title="Date of Birth (optional identity check)"
+              aria-label="Date of Birth"
+            />
+            <button
+              className="btn-grad"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => search()}
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? 'Searching…' : 'Find My Seat →'}
+            </button>
+          </div>
         </div>
 
-        {recent.length > 0 ? (
+        {recent.length > 0 && (
           <div className="chips">
             <span className="chip-label">Recent:</span>
             {recent.map((r) => (
@@ -130,22 +150,6 @@ export default function FindSeat() {
               ✕ Clear
             </button>
           </div>
-        ) : (
-          <div className="chips">
-            <span className="chip-label">Quick Try:</span>
-            {SAMPLE_ROLLS.map((r) => (
-              <button
-                key={r}
-                className="chip"
-                onClick={() => {
-                  setRoll(r);
-                  search(r);
-                }}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
         )}
       </div>
 
@@ -157,7 +161,7 @@ export default function FindSeat() {
             <span className="emoji">🪑</span>
             <h3>Locate Your University Examination Desk</h3>
             <p>
-              Type your roll number above or click one of the quick suggestions. We'll show you
+              Type your roll number and optional date of birth above. We'll show you
               your exact Hall, Desk, Row, Column, reporting time, and interactive floor plan.
             </p>
           </div>

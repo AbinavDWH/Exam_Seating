@@ -2,9 +2,10 @@
   "name": "examseat",
   "private": true,
   "scripts": {
-    "db:init": "php -c php.ini database/init.php",
-    "seed": "php -c php.ini database/seed_admin.php",
-    "php": "php -c php.ini -S localhost:8000 -t .",
+    "db:init": "PHP_INI_SCAN_DIR=:. php database/init.php",
+    "seed": "PHP_INI_SCAN_DIR=:. php database/seed_admin.php",
+    "php": "PHP_INI_SCAN_DIR=:. php -S localhost:8000 -t .",
+    "test": "PHP_INI_SCAN_DIR=:. php tests/test_all.php",
     "react": "npm --prefix frontend run dev",
     "setup": "npm install && npm --prefix frontend install && npm run db:init && npm run seed",
     "start": "concurrently -n php,react -c blue,green \"npm run php\" \"npm run react\""

@@ -5,91 +5,59 @@ require_admin();
 
 $pdo = db();
 
-// Add / delete / seed batch
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $action = $_POST['action'] ?? '';
     if ($action === 'delete') {
-        $pdo->prepare("DELETE FROM students WHERE id = ?")->execute([(int)$_POST['id']]);
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $pdo->prepare("DELETE FROM student_exams WHERE student_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM seating WHERE student_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM students WHERE id = ?")->execute([$id]);
+        }
         header('Location: students.php?toast=' . urlencode('Student record deleted successfully'));
         exit;
-    } elseif ($action === 'seed_cohorts') {
-        // Quick bulk generation of multi-year / multi-code students for testing 1000 rooms
-        $examId = (int)($_POST['seed_exam_id'] ?: 1);
-        $count = max(10, min(30000, (int)($_POST['seed_count'] ?: 1000)));
-
-        $cohortDefs = [
-            ['code' => 'CS3301', 'branch' => 'CSE',   'sem' => 3, 'yr' => 2, 'prefix' => '23CS'],
-            ['code' => 'EC3301', 'branch' => 'ECE',   'sem' => 3, 'yr' => 2, 'prefix' => '23EC'],
-            ['code' => 'ME3301', 'branch' => 'MECH',  'sem' => 3, 'yr' => 2, 'prefix' => '23ME'],
-            ['code' => 'CS3501', 'branch' => 'CSE',   'sem' => 5, 'yr' => 3, 'prefix' => '22CS'],
-            ['code' => 'IT3501', 'branch' => 'IT',    'sem' => 5, 'yr' => 3, 'prefix' => '22IT'],
-            ['code' => 'AD3501', 'branch' => 'AIDS',  'sem' => 5, 'yr' => 3, 'prefix' => '22AD'],
-            ['code' => 'EC3701', 'branch' => 'ECE',   'sem' => 7, 'yr' => 4, 'prefix' => '21EC'],
-            ['code' => 'IT3701', 'branch' => 'IT',    'sem' => 7, 'yr' => 4, 'prefix' => '21IT'],
-        ];
-
-        $names = ['Aarav', 'Diya', 'Rohan', 'Ananya', 'Vivaan', 'Ishita', 'Kabir', 'Meera', 'Arjun', 'Priya', 'Karan', 'Nisha', 'Vikram', 'Tanya', 'Siddharth', 'Trisha', 'Bhavya', 'Kunal', 'Abhishek', 'Esha'];
-
-        $pdo->beginTransaction();
-        try {
-            $chunkSize = 500;
-            for ($c = 0; $c < $count; $c += $chunkSize) {
-                $rows = [];
-                $params = [];
-                $limit = min($count, $c + $chunkSize);
-                for ($i = $c + 1; $i <= $limit; $i++) {
-                    $cDef = $cohortDefs[$i % count($cohortDefs)];
-                    $roll = $cDef['prefix'] . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
-                    $name = $names[$i % count($names)] . ' ' . chr(65 + ($i % 26));
-                    $rows[] = "(?, ?, ?, ?, ?, ?, ?, ?)";
-                    $params[] = $roll;
-                    $params[] = $name;
-                    $params[] = $cDef['branch'];
-                    $params[] = $cDef['branch'];
-                    $params[] = $cDef['sem'];
-                    $params[] = $cDef['yr'];
-                    $params[] = $cDef['code'];
-                    $params[] = $examId;
-                }
-                $sql = "INSERT INTO students (roll_no, name, branch, dept, semester, year, exam_code, exam_id) VALUES " . implode(", ", $rows) .
-                       " ON CONFLICT(roll_no) DO UPDATE SET exam_code = excluded.exam_code, exam_id = excluded.exam_id";
-                $pdo->prepare($sql)->execute($params);
-            }
-            $pdo->commit();
-            header('Location: students.php?toast=' . urlencode('Successfully seeded ' . number_format($count) . ' test cohort students'));
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
-        }
     } else {
-        $branch = strtoupper(trim($_POST['branch']));
-        $sem = (int)$_POST['semester'];
+        $roll = strtoupper(trim((string)($_POST['roll_no'] ?? '')));
+        $name = trim((string)($_POST['name'] ?? ''));
+        $branch = strtoupper(trim((string)($_POST['branch'] ?? '')));
+        $sem = max(1, min(8, (int)($_POST['semester'] ?? 1)));
         $yr = (int)ceil($sem / 2);
-        $examCode = trim($_POST['exam_code'] ?? '');
+        $dob = !empty($_POST['dob']) ? trim((string)$_POST['dob']) : '2005-01-01';
+        $examCode = trim((string)($_POST['exam_code'] ?? ''));
         if ($examCode === '') {
             $examCode = $branch . '-S' . $sem;
         }
+        $examId = !empty($_POST['exam_id']) ? (int)$_POST['exam_id'] : null;
 
-        $pdo->prepare("INSERT INTO students (roll_no, name, branch, dept, semester, year, exam_code, exam_id) VALUES (?,?,?,?,?,?,?,?)
-                       ON CONFLICT(roll_no) DO UPDATE SET
-                           name = excluded.name,
-                           branch = excluded.branch,
-                           dept = excluded.dept,
-                           semester = excluded.semester,
-                           year = excluded.year,
-                           exam_code = excluded.exam_code,
-                           exam_id = excluded.exam_id")
-            ->execute([
-                trim($_POST['roll_no']),
-                trim($_POST['name']),
-                $branch,
-                $branch,
-                $sem,
-                $yr,
-                $examCode,
-                (int)$_POST['exam_id'] ?: null
-            ]);
+        if ($roll === '' || $name === '' || $branch === '') {
+            header('Location: students.php?toast=' . urlencode('Roll number, name, and branch are required'));
+            exit;
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, dept, semester, year, exam_code, exam_id)
+                               VALUES (?,?,?,?,?,?,?,?,?)
+                               ON CONFLICT(roll_no) DO UPDATE SET
+                                   name = excluded.name,
+                                   dob = excluded.dob,
+                                   branch = excluded.branch,
+                                   dept = excluded.dept,
+                                   semester = excluded.semester,
+                                   year = excluded.year,
+                                   exam_code = excluded.exam_code,
+                                   exam_id = excluded.exam_id");
+        $stmt->execute([$roll, $name, $dob, $branch, $branch, $sem, $yr, $examCode, $examId]);
+
+        // Keep student_exams link table updated
+        if ($examId) {
+            $stuId = (int)$pdo->query("SELECT id FROM students WHERE roll_no = " . $pdo->quote($roll))->fetchColumn();
+            if ($stuId > 0) {
+                $pdo->prepare("INSERT INTO student_exams (student_id, exam_id, exam_code) VALUES (?, ?, ?)
+                               ON CONFLICT(student_id, exam_id) DO UPDATE SET exam_code = excluded.exam_code")
+                    ->execute([$stuId, $examId, $examCode]);
+            }
+        }
+
         header('Location: students.php?toast=' . urlencode('Student record saved successfully'));
         exit;
     }
@@ -168,14 +136,19 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
         <div class="text-primary"><?= svg_icon('plus', '', 20) ?></div>
         <h6 class="fw-bold mb-0">Add Student</h6>
       </div>
-      <form method="post">
+      <form method="post" action="students.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <div class="mb-2">
           <label class="form-label small fw-semibold">Roll Number</label>
-          <input name="roll_no" class="form-control" placeholder="e.g. 23CS101" required>
+          <input name="roll_no" class="form-control" placeholder="University Roll Number" required>
         </div>
         <div class="mb-2">
           <label class="form-label small fw-semibold">Full Name</label>
           <input name="name" class="form-control" placeholder="Student Full Name" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Date of Birth</label>
+          <input name="dob" type="date" class="form-control" value="2005-01-01" required>
         </div>
         <div class="row g-2 mb-2">
           <div class="col-6">
@@ -204,48 +177,13 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
       </form>
     </div>
 
-    <!-- Quick Cohort Generator for 1000 Rooms Demo -->
-    <div class="table-card mb-4">
-      <div class="d-flex justify-content-between align-items-center mb-1">
-        <div class="d-flex align-items-center gap-2">
-          <div class="text-primary"><?= svg_icon('magic', '', 18) ?></div>
-          <h6 class="fw-bold mb-0">1,000 Halls Demo Seeder</h6>
-        </div>
-        <span class="badge bg-success-subtle text-success small">Quick Test</span>
-      </div>
-      <p class="text-muted small">Populate hundreds/thousands of students across multi-year cohorts &amp; distinct exam codes.</p>
-      <form method="post">
-        <input type="hidden" name="action" value="seed_cohorts">
-        <div class="mb-2">
-          <label class="form-label small text-muted mb-1">Target Exam Session</label>
-          <select name="seed_exam_id" class="form-select form-select-sm">
-            <?php foreach ($exams as $e): ?>
-              <option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['exam_name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label small text-muted mb-1">Number of Students</label>
-          <select name="seed_count" class="form-select form-select-sm">
-            <option value="1000">1,000 Students (~33 Halls)</option>
-            <option value="3000">3,000 Students (~100 Halls)</option>
-            <option value="10000">10,000 Students (~333 Halls)</option>
-            <option value="30000">30,000 Students (1,000 Halls Full Capacity)</option>
-          </select>
-        </div>
-        <button class="btn btn-outline-primary btn-sm w-100 rounded-pill">
-          <?= svg_icon('magic', 'me-1', 14) ?>Generate Demo Cohort Students
-        </button>
-      </form>
-    </div>
-
     <!-- CSV Bulk Upload -->
     <div class="table-card">
       <div class="d-flex align-items-center gap-2 mb-2">
         <div class="text-primary"><?= svg_icon('download', '', 18) ?></div>
         <h6 class="fw-bold mb-0">Bulk Upload (CSV)</h6>
       </div>
-      <p class="text-muted small">Format: <code>roll_no,name,branch,semester,exam_id,exam_code</code></p>
+      <p class="text-muted small">Format: <code>roll_no,name,branch,semester,exam_id,exam_code,dob</code></p>
       <input type="file" id="csvFile" accept=".csv" class="form-control mb-2">
       <button class="btn btn-grad w-100" onclick="uploadCsv()">Upload CSV</button>
       <div id="csvResult" class="small mt-2"></div>
@@ -264,7 +202,7 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
           <select name="exam_code" class="form-select form-select-sm">
             <option value="">All Exam Codes</option>
             <?php foreach ($examCodes as $c): ?>
-              <option <?= $c===$code?'selected':'' ?>><?= $c ?></option>
+              <option value="<?= htmlspecialchars($c) ?>" <?= $c===$code?'selected':'' ?>><?= htmlspecialchars($c) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -272,7 +210,7 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
           <select name="branch" class="form-select form-select-sm">
             <option value="">All Departments</option>
             <?php foreach ($branches as $b): ?>
-              <option <?= $b===$branch?'selected':'' ?>><?= $b ?></option>
+              <option value="<?= htmlspecialchars($b) ?>" <?= $b===$branch?'selected':'' ?>><?= htmlspecialchars($b) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -306,7 +244,7 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
               </td>
               <td>
                 <span class="badge-branch" style="background:<?= $colors[$s['branch']] ?? '#64748b' ?>">
-                  <?= $s['branch'] ?>
+                  <?= htmlspecialchars($s['branch']) ?>
                 </span>
               </td>
               <td>Sem <?= (int)$s['semester'] ?> <span class="text-muted small">(Yr <?= ceil($s['semester'] / 2) ?>)</span></td>
@@ -354,6 +292,7 @@ $colors = ['CSE'=>'#6366f1','ECE'=>'#10b981','MECH'=>'#f59e0b','CIVIL'=>'#ef4444
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="post" action="students.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="id" id="deleteStudentId" value="">
         <div class="modal-body py-3">
@@ -391,7 +330,11 @@ async function uploadCsv() {
   const fd = new FormData(); fd.append('file', f);
   out.innerHTML = '<span class="text-muted">Uploading…</span>';
   try {
-    const res = await fetch('../api/students_upload.php', { method: 'POST', body: fd });
+    const res = await fetch('../api/students_upload.php', {
+      method: 'POST',
+      headers: { 'X-CSRF-TOKEN': '<?= csrf_token() ?>' },
+      body: fd
+    });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error);
     out.innerHTML = `<span class="text-success">Processed ${json.data.processed}, skipped ${json.data.skipped}.</span>`;

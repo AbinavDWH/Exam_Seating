@@ -4,20 +4,32 @@ require_once __DIR__ . '/../config/db.php';
 require_admin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $action = $_POST['action'] ?? '';
     if ($action === 'delete') {
-        $examId = (int)$_POST['id'];
-        db()->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$examId]);
-        db()->prepare("UPDATE students SET exam_id = NULL WHERE exam_id = ?")->execute([$examId]);
-        db()->prepare("DELETE FROM exams WHERE id = ?")->execute([$examId]);
+        $examId = (int)($_POST['id'] ?? 0);
+        if ($examId > 0) {
+            db()->prepare("DELETE FROM student_exams WHERE exam_id = ?")->execute([$examId]);
+            db()->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$examId]);
+            db()->prepare("UPDATE students SET exam_id = NULL WHERE exam_id = ?")->execute([$examId]);
+            db()->prepare("DELETE FROM exams WHERE id = ?")->execute([$examId]);
+        }
         header('Location: exams.php?toast=deleted');
         exit;
     } elseif ($action === 'assign') {          // bulk-assign students to an exam
-        $examId = (int)$_POST['exam_id'];
+        $examId = (int)($_POST['exam_id'] ?? 0);
         $sem = (int)($_POST['semester'] ?? 0);
-        $branch = trim($_POST['branch'] ?? '');
+        $branch = trim((string)($_POST['branch'] ?? ''));
 
-        $sql = "UPDATE students SET exam_id = ? WHERE 1";
+        if ($examId <= 0) {
+            header('Location: exams.php?toast=' . urlencode('Invalid exam session selected'));
+            exit;
+        }
+
+        // 1. Insert into student_exams link table for multi-exam support
+        $sql = "INSERT INTO student_exams (student_id, exam_id, exam_code)
+                SELECT id, ?, COALESCE(NULLIF(exam_code, ''), branch || '-S' || semester)
+                FROM students WHERE 1";
         $params = [$examId];
         if ($sem > 0) {
             $sql .= " AND semester = ?";
@@ -27,21 +39,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sql .= " AND branch = ?";
             $params[] = $branch;
         }
+        $sql .= " ON CONFLICT(student_id, exam_id) DO NOTHING";
         db()->prepare($sql)->execute($params);
+
+        // 2. Also keep students.exam_id in sync
+        $updSql = "UPDATE students SET exam_id = ? WHERE 1";
+        $updParams = [$examId];
+        if ($sem > 0) {
+            $updSql .= " AND semester = ?";
+            $updParams[] = $sem;
+        }
+        if ($branch !== '') {
+            $updSql .= " AND branch = ?";
+            $updParams[] = $branch;
+        }
+        db()->prepare($updSql)->execute($updParams);
+
         header('Location: exams.php?toast=' . urlencode('Students successfully assigned to exam session'));
         exit;
     } elseif ($action === 'unassign') {
-        $examId = (int)$_POST['exam_id'];
-        db()->prepare("UPDATE students SET exam_id = NULL WHERE exam_id = ?")->execute([$examId]);
-        db()->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$examId]);
+        $examId = (int)($_POST['exam_id'] ?? 0);
+        if ($examId > 0) {
+            db()->prepare("DELETE FROM student_exams WHERE exam_id = ?")->execute([$examId]);
+            db()->prepare("UPDATE students SET exam_id = NULL WHERE exam_id = ?")->execute([$examId]);
+            db()->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$examId]);
+        }
         header('Location: exams.php?toast=' . urlencode('Assignments cleared'));
         exit;
     } else {
-        db()->prepare("INSERT INTO exams (exam_name, exam_date, start_time, semester, status) VALUES (?,?,?,?,?)")
-            ->execute([trim($_POST['exam_name']), $_POST['exam_date'],
-                       $_POST['start_time'] ?: '09:30:00', (int)$_POST['semester'], $_POST['status']]);
-        header('Location: exams.php?toast=created');
-        exit;
+        $name = trim((string)($_POST['exam_name'] ?? ''));
+        $date = (string)($_POST['exam_date'] ?? '');
+        $time = $_POST['start_time'] ?: '09:30:00';
+        $sem = max(1, min(8, (int)($_POST['semester'] ?? 1)));
+        $status = in_array($_POST['status'] ?? '', ['upcoming', 'ongoing', 'completed'], true) ? $_POST['status'] : 'upcoming';
+
+        if ($name !== '' && $date !== '') {
+            db()->prepare("INSERT INTO exams (exam_name, exam_date, start_time, semester, status) VALUES (?,?,?,?,?)")
+                ->execute([$name, $date, $time, $sem, $status]);
+            header('Location: exams.php?toast=created');
+            exit;
+        } else {
+            header('Location: exams.php?toast=' . urlencode('Exam name and date are required'));
+            exit;
+        }
     }
 }
 
@@ -49,7 +89,7 @@ $pageTitle = 'Exams';
 require __DIR__ . '/_header.php';
 
 $exams = db()->query("SELECT e.*,
-    (SELECT COUNT(*) FROM students s WHERE s.exam_id = e.id) AS students,
+    (SELECT COUNT(DISTINCT se_stu.student_id) FROM student_exams se_stu WHERE se_stu.exam_id = e.id) AS students,
     (SELECT COUNT(*) FROM seating se WHERE se.exam_id = e.id) AS assigned
   FROM exams e ORDER BY e.exam_date DESC")->fetchAll();
 
@@ -77,7 +117,8 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
         <div class="text-primary"><?= svg_icon('plus', '', 20) ?></div>
         <h6 class="fw-bold mb-0">Create Exam Session</h6>
       </div>
-      <form method="post">
+      <form method="post" action="exams.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <div class="mb-3">
           <label class="form-label small fw-semibold">Exam Name</label>
           <input name="exam_name" class="form-control" placeholder="e.g. End Semester Nov 2026" required>
@@ -119,11 +160,12 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
         <h6 class="fw-bold mb-0">Bulk-Assign Students</h6>
       </div>
       <p class="text-muted small mb-3">Assign cohorts across multiple departments to an exam session.</p>
-      <form method="post" class="row g-3">
+      <form method="post" action="exams.php" class="row g-3" id="bulkAssignForm" onsubmit="return handleBulkAssignSubmit(event);">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="assign">
         <div class="col-12">
           <label class="form-label small text-muted mb-1">Target Exam Session</label>
-          <select name="exam_id" class="form-select" required>
+          <select name="exam_id" id="bulkExamSelect" class="form-select" required>
             <?php foreach ($exams as $e): ?>
               <option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['exam_name']) ?></option>
             <?php endforeach; ?>
@@ -131,19 +173,19 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
         </div>
         <div class="col-6">
           <label class="form-label small text-muted mb-1">Semester</label>
-          <select name="semester" class="form-select">
+          <select name="semester" id="bulkSemSelect" class="form-select">
             <option value="0">All Semesters</option>
             <?php foreach ($semesters as $s): ?>
-              <option value="<?= $s ?>">Sem <?= $s ?></option>
+              <option value="<?= (int)$s ?>">Sem <?= (int)$s ?></option>
             <?php endforeach; ?>
           </select>
         </div>
         <div class="col-6">
           <label class="form-label small text-muted mb-1">Department</label>
-          <select name="branch" class="form-select">
+          <select name="branch" id="bulkBranchSelect" class="form-select">
             <option value="">All Depts</option>
             <?php foreach ($branches as $b): ?>
-              <option value="<?= $b ?>"><?= $b ?></option>
+              <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -265,6 +307,7 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="post" action="exams.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="id" id="deleteExamId" value="">
         <div class="modal-body py-3">
@@ -284,6 +327,24 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
 </div>
 
 <script>
+function handleBulkAssignSubmit(e) {
+  const form = e.target;
+  const sem = form.semester.value;
+  const branch = form.branch.value;
+  const examSelect = form.exam_id;
+  const examName = examSelect.options[examSelect.selectedIndex]?.text || 'selected exam session';
+
+  let msg = `Assign ${branch ? branch : 'ALL departments'} (${sem == 0 ? 'ALL semesters' : 'Semester ' + sem}) to ${examName}?`;
+  if (sem == 0 && !branch) {
+    msg = `⚠️ WARNING: You have selected "All Semesters" and "All Depts".\n\nThis will assign ALL students across every department and semester to "${examName}".\n\nAre you sure you want to proceed?`;
+  }
+  if (!confirm(msg)) {
+    e.preventDefault();
+    return false;
+  }
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const deleteModal = document.getElementById('deleteExamModal');
   if (deleteModal) {

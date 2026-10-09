@@ -1,15 +1,27 @@
 <?php
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth.php';
 
 $roomId = (int)($_GET['room_id'] ?? 0);
 $examId = (int)($_GET['exam_id'] ?? 0);
-if ($roomId <= 0) json_response(['error' => 'room_id is required'], 400);
+$searchRoll = strtoupper(trim((string)($_GET['search_roll'] ?? $_GET['highlight'] ?? '')));
+
+if ($roomId <= 0) {
+    json_response(['error' => 'room_id is required'], 400);
+}
 
 $pdo = db();
-$room = $pdo->prepare("SELECT * FROM rooms WHERE id = ?");
+$room = $pdo->prepare("SELECT id, room_no, block, capacity, rows_count, cols_count, active FROM rooms WHERE id = ?");
 $room->execute([$roomId]);
 $room = $room->fetch();
-if (!$room) json_response(['error' => 'Room not found'], 404);
+if (!$room) {
+    json_response(['error' => 'Room not found'], 404);
+}
 
 if ($examId <= 0) {
     $q = $pdo->prepare("SELECT exam_id FROM seating WHERE room_id = ? ORDER BY exam_id DESC LIMIT 1");
@@ -29,11 +41,29 @@ $q = $pdo->prepare("
            COALESCE(se.exam_code, s.exam_code) AS exam_code,
            s.name, s.branch, s.semester, s.year
     FROM seating se
-    LEFT JOIN students s ON s.roll_no = se.roll_no AND s.exam_id = se.exam_id
+    LEFT JOIN students s ON s.roll_no = se.roll_no
     WHERE se.room_id = ? AND se.exam_id = ?
     ORDER BY se.row_num, se.col_num");
 $q->execute([$roomId, $examId]);
+$rawSeats = $q->fetchAll();
 
-json_response(['success' => true, 'data' => [
-    'room' => $room, 'exam' => $exam, 'seats' => $q->fetchAll(),
-]]);
+// Privacy guard: Only return student names if requester is an admin,
+// or for the searching student's own seat. All other student names are hidden.
+$isAdmin = is_admin();
+$seats = [];
+foreach ($rawSeats as $s) {
+    $isOwner = ($searchRoll !== '' && strtoupper(trim($s['roll_no'])) === $searchRoll);
+    if (!$isAdmin && !$isOwner) {
+        $s['name'] = null; // Protected: student privacy
+    }
+    $seats[] = $s;
+}
+
+json_response([
+    'success' => true,
+    'data' => [
+        'room'  => $room,
+        'exam'  => $exam,
+        'seats' => $seats,
+    ],
+]);

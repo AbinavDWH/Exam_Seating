@@ -8,6 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'Method not allowed'], 405);
 }
 require_admin_api();
+verify_csrf();
 
 $in = json_decode(file_get_contents('php://input'), true) ?: $_POST;
 $examId = (int)($in['exam_id'] ?? 0);
@@ -23,6 +24,8 @@ try {
         'num_rooms'          => !empty($in['num_rooms']) ? max(1, min(5000, (int)$in['num_rooms'])) : 0,
         'benches_per_room'   => !empty($in['benches_per_room']) ? max(1, min(100, (int)$in['benches_per_room'])) : 0,
         'students_per_bench' => !empty($in['students_per_bench']) ? max(1, min(20, (int)$in['students_per_bench'])) : 0,
+        'simulate'           => !empty($in['simulate']),
+        'spacing'            => ($in['spacing'] ?? 'dense') === 'alternate' ? 'alternate' : 'dense',
     ];
     $result = generateSeating(db(), $examId, $options);
     json_response(['success' => true, 'data' => $result]);

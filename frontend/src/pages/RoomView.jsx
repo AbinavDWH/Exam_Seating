@@ -10,10 +10,10 @@ export default function RoomView() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getRoom(roomId, params.get('exam') || '')
+    api.getRoom(roomId, params.get('exam') || '', params.get('highlight') || '')
       .then((r) => setData(r.data))
       .catch((e) => setError(e.message));
-  }, [roomId]);
+  }, [roomId, params]);
 
   if (error) return (
     <div className="state-box section">

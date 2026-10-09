@@ -6,71 +6,94 @@ require_admin();
 $pdo = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $action = $_POST['action'] ?? '';
     if ($action === 'delete') {
-        $pdo->prepare("DELETE FROM rooms WHERE id = ?")->execute([(int)$_POST['id']]);
-        header('Location: rooms.php?toast=' . urlencode('Hall deleted successfully'));
-        exit;
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            header('Location: rooms.php?toast=' . urlencode('Invalid hall ID specified'));
+            exit;
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $delSeats = $pdo->prepare("DELETE FROM seating WHERE room_id = ?");
+            $delSeats->execute([$id]);
+            $seatCount = $delSeats->rowCount();
+
+            $delRoom = $pdo->prepare("DELETE FROM rooms WHERE id = ?");
+            $delRoom->execute([$id]);
+            $pdo->commit();
+
+            $msg = 'Hall deleted successfully' . ($seatCount > 0 ? " (cleared {$seatCount} active seat allocations)" : '');
+            header('Location: rooms.php?toast=' . urlencode($msg));
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            header('Location: rooms.php?toast=' . urlencode('Could not delete hall: ' . $e->getMessage()));
+            exit;
+        }
     } elseif ($action === 'toggle') {
-        $pdo->prepare("UPDATE rooms SET active = 1 - active WHERE id = ?")->execute([(int)$_POST['id']]);
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $pdo->prepare("UPDATE rooms SET active = 1 - active WHERE id = ?")->execute([$id]);
+        }
         header('Location: rooms.php?toast=' . urlencode('Hall status updated'));
         exit;
     } elseif ($action === 'batch') {
-        $count = max(1, min(5000, (int)$_POST['batch_rooms']));
-        $startNo = (int)($_POST['batch_start_no'] ?: 101);
-        $block = trim($_POST['batch_block'] ?: 'Main Academic Block');
-        $rows = max(1, (int)$_POST['batch_rows']);
-        $cols = max(1, (int)$_POST['batch_cols']);
+        $count = max(1, min(5000, (int)($_POST['batch_rooms'] ?? 1)));
+        $startNo = max(1, (int)($_POST['batch_start_no'] ?: 101));
+        $block = trim((string)($_POST['batch_block'] ?: 'Main Academic Block'));
+        $rows = max(1, min(100, (int)($_POST['batch_rows'] ?? 15)));
+        $cols = max(1, min(20, (int)($_POST['batch_cols'] ?? 2)));
         $cap = $rows * $cols;
 
         $pdo->beginTransaction();
         try {
             $ins = $pdo->prepare("
-                INSERT INTO rooms (room_no, block, capacity, benches_count, students_per_bench, rows_count, cols_count, total_rows, total_cols, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
+                VALUES (?, ?, ?, ?, ?, 1)
                 ON CONFLICT(room_no) DO UPDATE SET
                     block = excluded.block,
                     capacity = excluded.capacity,
-                    benches_count = excluded.benches_count,
-                    students_per_bench = excluded.students_per_bench,
                     rows_count = excluded.rows_count,
                     cols_count = excluded.cols_count,
-                    total_rows = excluded.total_rows,
-                    total_cols = excluded.total_cols,
                     active = 1
             ");
 
             for ($i = 0; $i < $count; $i++) {
                 $rNo = (string)($startNo + $i);
-                $ins->execute([$rNo, $block, $cap, $rows, $cols, $rows, $cols, $rows, $cols]);
+                $ins->execute([$rNo, $block, $cap, $rows, $cols]);
             }
             $pdo->commit();
             header('Location: rooms.php?toast=' . urlencode('Successfully provisioned ' . number_format($count) . ' exam halls'));
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
+            header('Location: rooms.php?toast=' . urlencode('Batch hall creation failed: ' . $e->getMessage()));
+            exit;
         }
     } else {
-        $rows = max(1, (int)$_POST['rows_count']);
-        $cols = max(1, (int)$_POST['cols_count']);
+        $roomNo = trim((string)($_POST['room_no'] ?? ''));
+        $block = trim((string)($_POST['block'] ?? ''));
+        $rows = max(1, min(100, (int)($_POST['rows_count'] ?? 15)));
+        $cols = max(1, min(20, (int)($_POST['cols_count'] ?? 2)));
         $cap = $rows * $cols;
-        $pdo->prepare("INSERT INTO rooms (room_no, block, capacity, benches_count, students_per_bench, rows_count, cols_count, total_rows, total_cols)
-                       VALUES (?,?,?,?,?,?,?,?,?)
+
+        if ($roomNo === '') {
+            header('Location: rooms.php?toast=' . urlencode('Hall number is required'));
+            exit;
+        }
+
+        $pdo->prepare("INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
+                       VALUES (?,?,?,?,?,1)
                        ON CONFLICT(room_no) DO UPDATE SET
                            block = excluded.block,
                            capacity = excluded.capacity,
-                           benches_count = excluded.benches_count,
-                           students_per_bench = excluded.students_per_bench,
                            rows_count = excluded.rows_count,
                            cols_count = excluded.cols_count,
-                           total_rows = excluded.total_rows,
-                           total_cols = excluded.total_cols")
-            ->execute([
-                trim($_POST['room_no']),
-                trim($_POST['block']),
-                $cap, $rows, $cols, $rows, $cols, $rows, $cols
-            ]);
+                           active = 1")
+            ->execute([$roomNo, $block, $cap, $rows, $cols]);
         header('Location: rooms.php?toast=' . urlencode('Hall layout saved successfully'));
         exit;
     }
@@ -145,7 +168,8 @@ $rooms = $stmt->fetchAll();
         <h6 class="fw-bold mb-0">Add / Update Single Hall</h6>
       </div>
       <p class="text-muted small mb-3">Configure rows and columns of desks for this hall.</p>
-      <form method="post">
+      <form method="post" action="rooms.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <div class="mb-2">
           <label class="form-label small fw-semibold">Hall Number</label>
           <input name="room_no" class="form-control" placeholder="e.g. 101" value="101" required>
@@ -181,7 +205,8 @@ $rooms = $stmt->fetchAll();
         <span class="badge bg-info-subtle text-info small">1 to 5,000 Halls</span>
       </div>
       <p class="text-muted small mb-3">Quickly provision hundreds or thousands of exam halls.</p>
-      <form method="post">
+      <form method="post" action="rooms.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="batch">
         <div class="row g-2 mb-2">
           <div class="col-6">
@@ -272,7 +297,8 @@ $rooms = $stmt->fetchAll();
               </td>
               <td class="col-actions text-end text-nowrap">
                 <div class="action-buttons-group">
-                  <form method="post" class="d-inline">
+                  <form method="post" class="d-inline" action="rooms.php">
+                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
                     <input type="hidden" name="action" value="toggle">
                     <input type="hidden" name="id" value="<?= $r['id'] ?>">
                     <button class="btn-action <?= $isActive ? 'btn-action-edit' : 'btn-action-generate' ?>" title="<?= $isActive ? 'Deactivate Hall' : 'Activate Hall' ?>">
@@ -337,6 +363,7 @@ $rooms = $stmt->fetchAll();
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="post" action="rooms.php">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="id" id="deleteRoomId" value="">
         <div class="modal-body py-3">

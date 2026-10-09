@@ -43,40 +43,45 @@ export default function RoomGrid({ room, seats, highlightRoll }) {
       <div className="seat-grid" role="grid" aria-label={`Seating map of room ${room.room_no}`}>
         {grid.map((row, ri) => (
           <div key={ri} className="seat-row" style={{ gridTemplateColumns: `repeat(${perBench}, 1fr)` }}>
-            {row.map((s, ci) =>
-              s ? (
+            {row.map((s, ci) => {
+              if (!s) {
+                return <div key={ci} className="seat empty" aria-hidden="true" title={`Bench ${ri + 1}, Seat ${ci + 1} (Empty)`} />;
+              }
+              const isMe = highlightRoll && s.roll_no.toUpperCase() === highlightRoll.toUpperCase();
+              return (
                 <button
                   key={ci}
-                  className={`seat ${highlightRoll && s.roll_no.toUpperCase() === highlightRoll.toUpperCase() ? 'you' : ''}`}
+                  className={`seat ${isMe ? 'you' : ''}`}
                   style={{ '--dept': deptColor(s.branch) }}
-                  title={`${s.roll_no}${s.name ? ' · ' + s.name : ''} · Code: ${s.exam_code || s.branch} (${s.branch}) · Bench ${ri + 1}, Seat ${ci + 1}`}
+                  title={`${s.roll_no}${isMe && s.name ? ' · ' + s.name : ''} · Code: ${s.exam_code || s.branch} (${s.branch}) · Bench ${ri + 1}, Seat ${ci + 1}`}
                   aria-label={`Bench ${ri + 1} Seat ${ci + 1}: ${s.roll_no}, Code: ${s.exam_code || s.branch}, ${s.branch}`}
                   onClick={() => setSelected(s)}
                 >
                   {s.roll_no.slice(-4)}
                 </button>
-              ) : (
-                <div key={ci} className="seat empty" aria-hidden="true" title={`Bench ${ri + 1}, Seat ${ci + 1} (Empty)`} />
-              )
-            )}
+              );
+            })}
           </div>
         ))}
       </div>
 
-      {selected && (
-        <div className="seat-peek rise" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {selected.exam_code && (
-            <span className="badge-dept" style={{ background: '#0284c7' }}>
-              Paper: {selected.exam_code}
+      {selected && (() => {
+        const isSelectedMe = highlightRoll && selected.roll_no.toUpperCase() === highlightRoll.toUpperCase();
+        return (
+          <div className="seat-peek rise" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {selected.exam_code && (
+              <span className="badge-dept" style={{ background: '#0284c7' }}>
+                Paper: {selected.exam_code}
+              </span>
+            )}
+            <span className="badge-dept" style={{ background: deptColor(selected.branch) }}>{selected.branch}</span>
+            <b>{selected.roll_no}</b>
+            <span style={{ color: 'var(--muted)' }}>
+              {isSelectedMe && selected.name ? `${selected.name} · ` : ''}<b>Bench {selected.bench_no || selected.row_num}</b> (Seat {selected.seat_index || selected.col_num})
             </span>
-          )}
-          <span className="badge-dept" style={{ background: deptColor(selected.branch) }}>{selected.branch}</span>
-          <b>{selected.roll_no}</b>
-          <span style={{ color: 'var(--muted)' }}>
-            {selected.name || '—'} · <b>Bench {selected.bench_no || selected.row_num}</b> (Seat {selected.seat_index || selected.col_num})
-          </span>
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       <div className="legend">
         {branches.map((b) => (

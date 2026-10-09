@@ -140,14 +140,17 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         throw new RuntimeException("Exam with ID {$examId} not found.");
     }
 
-    // 2. Fetch assigned students
+    // 2. Fetch assigned students via student_exams link table or students.exam_id
     $stuStmt = $pdo->prepare("
-        SELECT id, roll_no, name, branch, semester, year, exam_code
-        FROM students
-        WHERE exam_id = ?
-        ORDER BY branch, semester, roll_no
+        SELECT s.id, s.roll_no, s.name, s.branch, s.semester, s.year,
+               COALESCE(se.exam_code, s.exam_code) AS exam_code
+        FROM students s
+        LEFT JOIN student_exams se ON se.student_id = s.id AND se.exam_id = ?
+        WHERE se.exam_id = ? OR s.exam_id = ?
+        GROUP BY s.id
+        ORDER BY s.branch, s.semester, s.roll_no
     ");
-    $stuStmt->execute([$examId]);
+    $stuStmt->execute([$examId, $examId, $examId]);
     $rawStudents = $stuStmt->fetchAll();
 
     if (empty($rawStudents)) {
@@ -166,58 +169,104 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         $students[] = $stu;
     }
 
-    // 3. Handle Rooms & Bench capacity configuration (Supports 1000+ rooms!)
+    // 3. Check for concurrent exams at the same date and overlapping time to prevent double-booking halls
+    $examDate = $exam['exam_date'];
+    $examStartTime = $exam['start_time'];
+    $examEndTime = !empty($exam['end_time']) ? $exam['end_time'] : date('H:i:s', strtotime($examStartTime) + 3 * 3600);
+
+    $conflictStmt = $pdo->prepare("
+        SELECT DISTINCT s.room_id, r.room_no, e.id AS exam_id, e.exam_name, e.start_time, e.end_time
+        FROM seating s
+        JOIN exams e ON e.id = s.exam_id
+        JOIN rooms r ON r.id = s.room_id
+        WHERE e.id != ?
+          AND e.exam_date = ?
+          AND e.start_time < ?
+          AND COALESCE(NULLIF(e.end_time, ''), '23:59:59') > ?
+    ");
+    $conflictStmt->execute([$examId, $examDate, $examEndTime, $examStartTime]);
+    $conflicts = $conflictStmt->fetchAll();
+
+    $bookedRoomIds = [];
+    $conflictWarnings = [];
+    foreach ($conflicts as $c) {
+        $bookedRoomIds[(int)$c['room_id']] = true;
+        $conflictWarnings[] = "Hall {$c['room_no']} is already occupied by '{$c['exam_name']}' ({$c['start_time']} - {$c['end_time']})";
+    }
+
+    // 4. Handle Rooms & Bench capacity configuration
     $numRooms = !empty($options['num_rooms']) ? (int)$options['num_rooms'] : 0;
     $benchesPerRoom = !empty($options['benches_per_room']) ? (int)$options['benches_per_room'] : 0;
     $studentsPerBench = !empty($options['students_per_bench']) ? (int)$options['students_per_bench'] : 0;
+    $simulate = !empty($options['simulate']);
+    $spacing = ($options['spacing'] ?? 'dense') === 'alternate' ? 'alternate' : 'dense';
 
     $rooms = [];
     if ($numRooms > 0 && $benchesPerRoom > 0 && $studentsPerBench > 0) {
-        // High-performance batch upsert for custom rooms (1 to 5000+ rooms)
         $cap = $benchesPerRoom * $studentsPerBench;
 
-        $pdo->beginTransaction();
-        try {
-            $upsert = $pdo->prepare("
-                INSERT INTO rooms (room_no, block, capacity, benches_count, students_per_bench, rows_count, cols_count, total_rows, total_cols, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                ON CONFLICT(room_no) DO UPDATE SET
-                    block = excluded.block,
-                    capacity = excluded.capacity,
-                    benches_count = excluded.benches_count,
-                    students_per_bench = excluded.students_per_bench,
-                    rows_count = excluded.rows_count,
-                    cols_count = excluded.cols_count,
-                    total_rows = excluded.total_rows,
-                    total_cols = excluded.total_cols,
-                    active = 1
-            ");
-
+        if ($simulate) {
+            // Pure in-memory simulation: do NOT touch database rooms table!
             for ($k = 1; $k <= $numRooms; $k++) {
-                $roomNo = (string)(100 + $k);
                 $blockNum = (int)ceil($k / 20);
-                $block = "Block " . chr(64 + ($blockNum % 26 ?: 1)) . " (Halls " . (($blockNum - 1) * 20 + 1) . "-" . ($blockNum * 20) . ")";
-                $upsert->execute([
-                    $roomNo, $block, $cap, $benchesPerRoom, $studentsPerBench,
-                    $benchesPerRoom, $studentsPerBench, $benchesPerRoom, $studentsPerBench
-                ]);
+                $block = "Sim Block " . chr(64 + ($blockNum % 26 ?: 1));
+                $rooms[] = [
+                    'id' => -1 * $k,
+                    'room_no' => "Sim-Hall-" . (100 + $k),
+                    'block' => $block,
+                    'capacity' => $cap,
+                    'rows_count' => $benchesPerRoom,
+                    'cols_count' => $studentsPerBench,
+                ];
             }
-            $pdo->commit();
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
+        } else {
+            // Real persistence for custom rooms: create unique non-colliding rooms without overwriting existing halls!
+            $existingNos = $pdo->query("SELECT room_no FROM rooms")->fetchAll(PDO::FETCH_COLUMN);
+            $existingMap = array_fill_keys($existingNos, true);
+            $insert = $pdo->prepare("
+                INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
+                VALUES (?, ?, ?, ?, ?, 1)
+            ");
+            $pdo->beginTransaction();
+            try {
+                for ($k = 1; $k <= $numRooms; $k++) {
+                    $base = 100 + $k;
+                    $candidate = "Hall {$base}";
+                    $suffix = 1;
+                    while (isset($existingMap[$candidate]) || isset($existingMap[(string)$base])) {
+                        $candidate = "Hall {$base}-{$suffix}";
+                        $suffix++;
+                    }
+                    $existingMap[$candidate] = true;
+                    $blockNum = (int)ceil($k / 20);
+                    $block = "Custom Block " . chr(64 + ($blockNum % 26 ?: 1));
+                    $insert->execute([$candidate, $block, $cap, $benchesPerRoom, $studentsPerBench]);
+                    $roomId = (int)$pdo->lastInsertId();
+                    $rooms[] = [
+                        'id' => $roomId,
+                        'room_no' => $candidate,
+                        'block' => $block,
+                        'capacity' => $cap,
+                        'rows_count' => $benchesPerRoom,
+                        'cols_count' => $studentsPerBench,
+                    ];
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
         }
-
-        // Fetch the generated rooms
-        $rStmt = $pdo->prepare("SELECT id, room_no, block, capacity, benches_count, students_per_bench, rows_count, cols_count FROM rooms WHERE active = 1 ORDER BY id ASC LIMIT ?");
-        $rStmt->execute([$numRooms]);
-        $rooms = $rStmt->fetchAll();
     } else {
-        // Use existing active rooms
-        $rooms = $pdo->query("SELECT id, room_no, block, capacity, benches_count, students_per_bench, rows_count, cols_count FROM rooms WHERE active = 1 ORDER BY block, room_no")->fetchAll();
+        // Use existing active rooms, excluding rooms already booked by concurrent exams
+        $allRooms = $pdo->query("SELECT id, room_no, block, capacity, rows_count, cols_count FROM rooms WHERE active = 1 ORDER BY block, room_no")->fetchAll();
+        $rooms = array_values(array_filter($allRooms, fn($r) => !isset($bookedRoomIds[(int)$r['id']])));
     }
 
     if (empty($rooms)) {
+        if (!empty($conflictWarnings)) {
+            throw new RuntimeException("All available exam halls are occupied by concurrent exams on {$examDate} between {$examStartTime} and {$examEndTime}: " . implode('; ', $conflictWarnings));
+        }
         throw new RuntimeException("No active exam halls available. Please add or activate rooms first.");
     }
 
@@ -226,7 +275,7 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         $totalCapacity += (int)$r['rows_count'] * (int)$r['cols_count'];
     }
 
-    // 4. Group students by Exam Code
+    // 5. Group students by Exam Code
     $cohortQueues = [];
     $cohortList = [];
     foreach ($students as $stu) {
@@ -237,9 +286,7 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         }
     }
 
-    // 5. High-Speed Room-Isolated Seating Generation
-    // Each room has local neighbor checks and immediate local repair.
-    // Scales linearly O(Rooms * RoomCapacity^2) — blazingly fast for 1000+ rooms!
+    // 6. Room-Isolated Seating Generation with optional alternate empty seating
     $seats = [];
     $totalStudents = count($students);
     $placedCount = 0;
@@ -270,6 +317,12 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
 
         for ($b = 1; $b <= $benches && $placedCount < $totalStudents; $b++) {
             for ($s = 1; $s <= $seatsOnBench && $placedCount < $totalStudents; $s++) {
+                // If alternate spacing is requested (e.g. single paper or imbalanced 90/10 batch),
+                // leave alternate seats empty in a checkerboard pattern
+                if ($spacing === 'alternate' && (($b + $s) % 2 !== 0)) {
+                    continue;
+                }
+
                 // Find available cohorts with remaining students
                 $availableCohorts = [];
                 foreach ($cohortQueues as $cKey => $q) {
@@ -298,7 +351,6 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
                     $penalty = calculate_seat_conflict($simSeat, $roomGridMap, $placementOffsets);
                     $remCount = count($cohortQueues[$cKey]);
 
-                    // Prefer: 1. Zero/minimal penalty, 2. Largest remaining cohort count (smooth round-robin across rooms)
                     if ($penalty < $bestScore || ($penalty === $bestScore && $remCount > $bestRemaining)) {
                         $bestScore = $penalty;
                         $bestRemaining = $remCount;
@@ -397,42 +449,61 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         }
     }
 
-    // 6. Final Comprehensive Plan Audit
+    // 7. Final Comprehensive Plan Audit
     $audit = audit_seating_plan($seats);
 
-    // 7. High-Performance Chunked Database Persistence
-    $pdo->beginTransaction();
-    try {
-        $del = $pdo->prepare("DELETE FROM seating WHERE exam_id = ?");
-        $del->execute([$examId]);
-
-        // Insert in multi-row chunks of 250 rows for blazing speed at scale (30,000 seats inserted in ~0.2s)
-        $chunkSize = 250;
-        $totalSeats = count($seats);
-        for ($i = 0; $i < $totalSeats; $i += $chunkSize) {
-            $chunk = array_slice($seats, $i, $chunkSize);
-            $placeholders = [];
-            $params = [];
-            foreach ($chunk as $s) {
-                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                $params[] = $examId;
-                $params[] = $s['room_id'];
-                $params[] = $s['roll_no'];
-                $params[] = $s['student_id'] ?? null;
-                $params[] = $s['exam_code'];
-                $params[] = $s['row_num'];
-                $params[] = $s['col_num'];
-                $params[] = $s['bench_no'];
-                $params[] = $s['seat_index'];
-            }
-            $sql = "INSERT INTO seating (exam_id, room_id, roll_no, student_id, exam_code, row_num, col_num, bench_no, seat_index) VALUES " . implode(", ", $placeholders);
-            $pdo->prepare($sql)->execute($params);
+    // 8. Warnings collection
+    $warnings = [];
+    if (!empty($conflictWarnings)) {
+        foreach ($conflictWarnings as $cw) {
+            $warnings[] = "⚠️ " . $cw;
         }
+    }
+    if ($audit['same_exam_code_conflicts'] > 0) {
+        $warnings[] = "⚠️ {$audit['same_exam_code_conflicts']} adjacent conflict(s) detected due to paper imbalance (e.g. single-paper or 90/10 split). Consider enabling 'Alternate Seating' (checkerboard spacing) to leave alternate seats empty.";
+    }
+    if ($placedCount < $totalStudents) {
+        $unplaced = $totalStudents - $placedCount;
+        $warnings[] = "⚠️ {$unplaced} student(s) could not be seated due to capacity limits. Please add more halls or benches.";
+    }
+    if ($simulate) {
+        $warnings[] = "ℹ️ Simulation mode: Seating generated in-memory. Database records were NOT modified.";
+    }
 
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        throw $e;
+    // 9. Chunked Database Persistence (only if NOT in simulation mode)
+    if (!$simulate) {
+        $pdo->beginTransaction();
+        try {
+            $del = $pdo->prepare("DELETE FROM seating WHERE exam_id = ?");
+            $del->execute([$examId]);
+
+            $chunkSize = 250;
+            $totalSeats = count($seats);
+            for ($i = 0; $i < $totalSeats; $i += $chunkSize) {
+                $chunk = array_slice($seats, $i, $chunkSize);
+                $placeholders = [];
+                $params = [];
+                foreach ($chunk as $s) {
+                    $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $params[] = $examId;
+                    $params[] = $s['room_id'];
+                    $params[] = $s['roll_no'];
+                    $params[] = $s['student_id'] ?? null;
+                    $params[] = $s['exam_code'];
+                    $params[] = $s['row_num'];
+                    $params[] = $s['col_num'];
+                    $params[] = $s['bench_no'];
+                    $params[] = $s['seat_index'];
+                }
+                $sql = "INSERT INTO seating (exam_id, room_id, roll_no, student_id, exam_code, row_num, col_num, bench_no, seat_index) VALUES " . implode(", ", $placeholders);
+                $pdo->prepare($sql)->execute($params);
+            }
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
     }
 
     $durationMs = round((microtime(true) - $startTime) * 1000, 2);
@@ -458,5 +529,8 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         'semesters_count'          => $uniqueSemesters,
         'benches_used'             => count(array_unique(array_map(fn($s) => $s['room_id'] . ':' . $s['bench_no'], $seats))),
         'execution_time_ms'        => $durationMs,
+        'warnings'                 => $warnings,
+        'simulated'                => $simulate,
+        'spacing'                  => $spacing,
     ];
 }

@@ -9,8 +9,6 @@ const fmtDate = (d) =>
     year: 'numeric',
   });
 
-const SAMPLE_CHIPS = ['23CS101', '23EC101', '23ME101', '22IT101', '21EC301'];
-
 export default function Home() {
   const [q, setQ] = useState('');
   const [data, setData] = useState(null);
@@ -85,20 +83,6 @@ export default function Home() {
             Find My Seat →
           </button>
         </form>
-
-        <div className="chips" style={{ justifyContent: 'center', marginTop: 14 }}>
-          <span className="chip-label">Try Sample:</span>
-          {SAMPLE_CHIPS.map((roll) => (
-            <button
-              key={roll}
-              type="button"
-              className="chip"
-              onClick={() => navigate(`/find?roll=${encodeURIComponent(roll)}`)}
-            >
-              {roll}
-            </button>
-          ))}
-        </div>
       </div>
 
       <section className="section container">
