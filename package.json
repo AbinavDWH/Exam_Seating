@@ -1,0 +1,15 @@
+{
+  "name": "examseat",
+  "private": true,
+  "scripts": {
+    "db:init": "php -c php.ini database/init.php",
+    "seed": "php -c php.ini database/seed_admin.php",
+    "php": "php -c php.ini -S localhost:8000 -t .",
+    "react": "npm --prefix frontend run dev",
+    "setup": "npm install && npm --prefix frontend install && npm run db:init && npm run seed",
+    "start": "concurrently -n php,react -c blue,green \"npm run php\" \"npm run react\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

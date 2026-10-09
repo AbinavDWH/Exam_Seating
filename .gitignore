@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+admin/vendor/
+api/vendor/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+api/.env
+admin/.env
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PHP
+composer.phar
+vendor/
+*.phpintel
+
+# Vite/React
+vite.config.js.timestamp-*
+*.local
+
+# Database
+*.sqlite
+*.db
+database/*.sql
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.pem
+.sass-cache/
+
+*/_pycache/*
+
+.agents/*
+.agent/*
+.agents
+
+skills/*
+
+skills
