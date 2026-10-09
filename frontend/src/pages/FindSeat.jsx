@@ -42,18 +42,22 @@ export default function FindSeat() {
   });
 
   const search = useCallback(
-    async (value, dobVal) => {
+    async (value, dobVal, examIdVal = null) => {
       const rollNo = String(value ?? roll).trim();
       const currentDob = String(dobVal ?? dob).trim();
       if (!rollNo) {
         toast('🙂 Please enter your university roll number');
         return;
       }
+      if (!currentDob) {
+        toast('🎂 Please enter your date of birth for identity verification');
+        return;
+      }
       setStatus('loading');
       setResult(null);
       setRoom(null);
       try {
-        const { data } = await api.findSeat(rollNo, null, currentDob || null);
+        const { data } = await api.findSeat(rollNo, currentDob, examIdVal);
         setResult(data);
         setStatus('found');
         setRecent((prev) => {
@@ -81,7 +85,9 @@ export default function FindSeat() {
     if (r) {
       setRoll(r);
       if (d) setDob(d);
-      search(r, d);
+      if (r && d) {
+        search(r, d);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -105,6 +111,7 @@ export default function FindSeat() {
               placeholder="Enter Roll Number… e.g. 23CS101"
               aria-label="Roll number"
               autoFocus
+              required
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
@@ -116,9 +123,10 @@ export default function FindSeat() {
               value={dob}
               onChange={(e) => setDob(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && search()}
-              placeholder="Date of Birth (optional verification)"
-              title="Date of Birth (optional identity check)"
+              placeholder="Date of Birth (Required for verification)"
+              title="Date of Birth (Required identity verification)"
               aria-label="Date of Birth"
+              required
             />
             <button
               className="btn-grad"
@@ -183,6 +191,40 @@ export default function FindSeat() {
 
         {status === 'found' && result && (
           <>
+            {result.all_exams && result.all_exams.length > 1 && (
+              <div
+                className="no-print rise"
+                style={{
+                  marginBottom: 20,
+                  background: 'var(--surface, #ffffff)',
+                  padding: '14px 18px',
+                  borderRadius: 14,
+                  border: '1px solid var(--border, #e2e8f0)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                }}
+              >
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  📅 You have {result.all_exams.length} scheduled examination sessions. Switch paper:
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {result.all_exams.map((ex) => {
+                    const isSelected = +ex.exam_id === +result.exam_id;
+                    return (
+                      <button
+                        key={ex.exam_id}
+                        type="button"
+                        className={isSelected ? 'btn-grad' : 'btn-ghost'}
+                        style={{ fontSize: '0.82rem', padding: '6px 14px', borderRadius: 8 }}
+                        onClick={() => search(roll, dob, ex.exam_id)}
+                      >
+                        {ex.exam_code ? `[${ex.exam_code}] ` : ''}
+                        {ex.exam_name} · {ex.exam_date}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <SeatCard data={result} />
             {room ? (
               <RoomGrid room={room.room} seats={room.seats} highlightRoll={result.roll_no} />

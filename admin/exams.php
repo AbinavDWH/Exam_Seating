@@ -20,13 +20,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $examId = (int)($_POST['exam_id'] ?? 0);
         $sem = (int)($_POST['semester'] ?? 0);
         $branch = trim((string)($_POST['branch'] ?? ''));
+        $confirmAll = !empty($_POST['confirm_all_students']);
 
         if ($examId <= 0) {
             header('Location: exams.php?toast=' . urlencode('Invalid exam session selected'));
             exit;
         }
 
-        // 1. Insert into student_exams link table for multi-exam support
+        if ($sem !== 0 && ($sem < 1 || $sem > 8)) {
+            header('Location: exams.php?toast=' . urlencode('Semester must be between 1 and 8, or All Semesters'));
+            exit;
+        }
+
+        // Server-side guard: when assigning ALL semesters and ALL depts, require explicit confirmation
+        if ($sem === 0 && $branch === '' && !$confirmAll) {
+            header('Location: exams.php?toast=' . urlencode('Assigning all students across all departments requires server confirmation. Check the confirmation box before proceeding.'));
+            exit;
+        }
+
+        // Insert into student_exams link table for multi-exam support
         $sql = "INSERT INTO student_exams (student_id, exam_id, exam_code)
                 SELECT id, ?, COALESCE(NULLIF(exam_code, ''), branch || '-S' || semester)
                 FROM students WHERE 1";
@@ -41,19 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $sql .= " ON CONFLICT(student_id, exam_id) DO NOTHING";
         db()->prepare($sql)->execute($params);
-
-        // 2. Also keep students.exam_id in sync
-        $updSql = "UPDATE students SET exam_id = ? WHERE 1";
-        $updParams = [$examId];
-        if ($sem > 0) {
-            $updSql .= " AND semester = ?";
-            $updParams[] = $sem;
-        }
-        if ($branch !== '') {
-            $updSql .= " AND branch = ?";
-            $updParams[] = $branch;
-        }
-        db()->prepare($updSql)->execute($updParams);
 
         header('Location: exams.php?toast=' . urlencode('Students successfully assigned to exam session'));
         exit;
@@ -70,7 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim((string)($_POST['exam_name'] ?? ''));
         $date = (string)($_POST['exam_date'] ?? '');
         $time = $_POST['start_time'] ?: '09:30:00';
-        $sem = max(1, min(8, (int)($_POST['semester'] ?? 1)));
+        $sem = (int)($_POST['semester'] ?? 0);
+        if ($sem < 1 || $sem > 8) {
+            header('Location: exams.php?toast=' . urlencode('Semester must be between 1 and 8'));
+            exit;
+        }
         $status = in_array($_POST['status'] ?? '', ['upcoming', 'ongoing', 'completed'], true) ? $_POST['status'] : 'upcoming';
 
         if ($name !== '' && $date !== '') {
@@ -188,6 +191,14 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
               <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
             <?php endforeach; ?>
           </select>
+        </div>
+        <div class="col-12" id="confirmAllWrapper" style="display:none;">
+          <div class="form-check p-2 bg-warning-subtle rounded border border-warning text-warning-emphasis">
+            <input class="form-check-input ms-0 me-2" type="checkbox" name="confirm_all_students" value="1" id="confirmAllCheck">
+            <label class="form-check-label small fw-semibold" for="confirmAllCheck">
+              ⚠️ I confirm assigning ALL students across ALL departments to this exam
+            </label>
+          </div>
         </div>
         <div class="col-12 mt-3">
           <button class="btn btn-primary-soft w-100 justify-content-center">
@@ -327,12 +338,34 @@ $semesters = db()->query("SELECT DISTINCT semester FROM students ORDER BY semest
 </div>
 
 <script>
+function updateBulkConfirmState() {
+  const sem = document.getElementById('bulkSemSelect').value;
+  const branch = document.getElementById('bulkBranchSelect').value;
+  const wrap = document.getElementById('confirmAllWrapper');
+  const chk = document.getElementById('confirmAllCheck');
+  if (sem === '0' && branch === '') {
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+    chk.checked = false;
+  }
+}
+
 function handleBulkAssignSubmit(e) {
   const form = e.target;
   const sem = form.semester.value;
   const branch = form.branch.value;
   const examSelect = form.exam_id;
   const examName = examSelect.options[examSelect.selectedIndex]?.text || 'selected exam session';
+
+  if (sem == 0 && !branch) {
+    const chk = form.confirm_all_students;
+    if (!chk || !chk.checked) {
+      alert('⚠️ To assign ALL students across ALL departments, you must check the confirmation box below the dropdowns.');
+      e.preventDefault();
+      return false;
+    }
+  }
 
   let msg = `Assign ${branch ? branch : 'ALL departments'} (${sem == 0 ? 'ALL semesters' : 'Semester ' + sem}) to ${examName}?`;
   if (sem == 0 && !branch) {
@@ -346,6 +379,14 @@ function handleBulkAssignSubmit(e) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const semSel = document.getElementById('bulkSemSelect');
+  const branchSel = document.getElementById('bulkBranchSelect');
+  if (semSel && branchSel) {
+    semSel.addEventListener('change', updateBulkConfirmState);
+    branchSel.addEventListener('change', updateBulkConfirmState);
+    updateBulkConfirmState();
+  }
+
   const deleteModal = document.getElementById('deleteExamModal');
   if (deleteModal) {
     deleteModal.addEventListener('show.bs.modal', (event) => {

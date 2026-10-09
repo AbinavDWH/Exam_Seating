@@ -25,6 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['admin_id'] = $admin['id'];
             $_SESSION['admin_user'] = $admin['username'];
+
+            if (!empty($admin['must_change_password']) || password_verify('Admin@123', $admin['password_hash'])) {
+                $_SESSION['must_change_password'] = true;
+                header('Location: change_password.php');
+                exit;
+            }
+
             header('Location: index.php');
             exit;
         }

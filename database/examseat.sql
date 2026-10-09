@@ -4,12 +4,25 @@
 
 -- ---------- Admins ----------
 CREATE TABLE IF NOT EXISTS admins (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      VARCHAR(50)  UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role          VARCHAR(20)  DEFAULT 'admin',
-    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    username             VARCHAR(50)  UNIQUE NOT NULL,
+    password_hash        VARCHAR(255) NOT NULL,
+    role                 VARCHAR(20)  DEFAULT 'admin',
+    must_change_password INTEGER      NOT NULL DEFAULT 0,
+    created_at           DATETIME     DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ---------- Rate Limits (Persistent IP-based protection) ----------
+CREATE TABLE IF NOT EXISTS rate_limits (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip           VARCHAR(45) NOT NULL,
+    action       VARCHAR(50) NOT NULL,
+    attempts     INTEGER     NOT NULL DEFAULT 1,
+    last_attempt INTEGER     NOT NULL,
+    locked_until INTEGER     NOT NULL DEFAULT 0,
+    UNIQUE(ip, action)
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_ip_action ON rate_limits(ip, action);
 
 -- ---------- Exams ----------
 CREATE TABLE IF NOT EXISTS exams (

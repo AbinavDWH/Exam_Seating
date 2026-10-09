@@ -26,7 +26,7 @@ $stmt = db()->prepare("
          COALESCE(se.exam_code, s.exam_code) AS exam_code
   FROM rooms r
   JOIN seating se ON se.room_id = r.id AND se.exam_id = ?
-  LEFT JOIN students s ON s.roll_no = se.roll_no AND s.exam_id = se.exam_id
+  LEFT JOIN students s ON s.roll_no = se.roll_no
   WHERE 1 $whereExtra
   ORDER BY r.block, CAST(r.room_no AS INTEGER), r.room_no, se.row_num, se.col_num");
 $stmt->execute($params);

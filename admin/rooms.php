@@ -15,6 +15,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        $chkStmt = $pdo->prepare("SELECT COUNT(*) FROM seating WHERE room_id = ?");
+        $chkStmt->execute([$id]);
+        $seatCount = (int)$chkStmt->fetchColumn();
+
+        if ($seatCount > 0 && empty($_POST['confirm_unseat'])) {
+            header('Location: rooms.php?toast=' . urlencode("Hall has {$seatCount} seated students. You must confirm un-seating before deleting."));
+            exit;
+        }
+
         $pdo->beginTransaction();
         try {
             $delSeats = $pdo->prepare("DELETE FROM seating WHERE room_id = ?");
@@ -310,6 +319,7 @@ $rooms = $stmt->fetchAll();
                           data-bs-toggle="modal"
                           data-bs-target="#deleteRoomModal"
                           data-id="<?= $r['id'] ?>"
+                          data-occupied="<?= (int)$r['occupied'] ?>"
                           data-name="Hall <?= htmlspecialchars($r['room_no'], ENT_QUOTES) ?>">
                     <?= svg_icon('trash', '', 15) ?>
                   </button>
@@ -368,9 +378,21 @@ $rooms = $stmt->fetchAll();
         <input type="hidden" name="id" id="deleteRoomId" value="">
         <div class="modal-body py-3">
           <p class="text-body mb-2">Are you sure you want to delete <strong id="deleteRoomName">this hall</strong>?</p>
-          <div class="p-3 bg-danger-subtle rounded-3 text-danger small">
-            <?= svg_icon('alert-triangle', 'me-1', 15) ?>
-            This will remove the room configuration and any seats mapped to this hall.
+          <div id="unseatWarning" class="p-3 bg-danger-subtle rounded-3 text-danger small mb-2" style="display:none;">
+            <div class="fw-bold mb-1">
+              <?= svg_icon('alert-triangle', 'me-1', 15) ?>
+              <span id="unseatWarningText">Active Seated Students Found!</span>
+            </div>
+            <div>Deleting this hall will un-seat and displace these students from their examination timetable.</div>
+            <div class="form-check mt-2 pt-2 border-top border-danger-subtle">
+              <input class="form-check-input" type="checkbox" name="confirm_unseat" value="1" id="confirmUnseatCheck">
+              <label class="form-check-label fw-semibold" for="confirmUnseatCheck">
+                I understand and confirm un-seating these students
+              </label>
+            </div>
+          </div>
+          <div class="p-3 bg-secondary-subtle rounded-3 text-secondary small">
+            This will remove the room configuration from the system.
           </div>
         </div>
         <div class="modal-footer border-0 pt-0">
@@ -388,8 +410,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (deleteModal) {
     deleteModal.addEventListener('show.bs.modal', (event) => {
       const btn = event.relatedTarget;
+      const occ = parseInt(btn.getAttribute('data-occupied') || '0', 10);
       document.getElementById('deleteRoomId').value = btn.getAttribute('data-id');
       document.getElementById('deleteRoomName').textContent = `"${btn.getAttribute('data-name')}"`;
+
+      const warn = document.getElementById('unseatWarning');
+      const warnTxt = document.getElementById('unseatWarningText');
+      const chk = document.getElementById('confirmUnseatCheck');
+      if (occ > 0) {
+        warn.style.display = 'block';
+        warnTxt.textContent = `Warning: ${occ} student(s) currently seated in this hall!`;
+        chk.required = true;
+        chk.checked = false;
+      } else {
+        warn.style.display = 'none';
+        chk.required = false;
+        chk.checked = false;
+      }
     });
   }
 });

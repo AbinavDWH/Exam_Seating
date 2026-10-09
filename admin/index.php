@@ -43,7 +43,7 @@ $stats = db()->query("SELECT
   (SELECT COUNT(*) FROM seating) AS seats")->fetch();
 
 $exams = db()->query("SELECT e.*,
-  (SELECT COUNT(*) FROM students st WHERE st.exam_id=e.id) AS students_count,
+  (SELECT COUNT(DISTINCT se_stu.student_id) FROM student_exams se_stu WHERE se_stu.exam_id=e.id) AS students_count,
   (SELECT COUNT(*) FROM seating s WHERE s.exam_id=e.id) AS assigned
   FROM exams e ORDER BY e.exam_date DESC")->fetchAll();
 

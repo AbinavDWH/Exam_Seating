@@ -17,11 +17,21 @@ function require_admin(): void {
         header('Location: login.php');
         exit;
     }
+    if (!empty($_SESSION['must_change_password'])) {
+        $curr = basename($_SERVER['PHP_SELF'] ?? '');
+        if ($curr !== 'change_password.php' && $curr !== 'logout.php') {
+            header('Location: change_password.php');
+            exit;
+        }
+    }
 }
 
 function require_admin_api(): void {
     if (!is_admin()) {
         json_response(['error' => 'Unauthorized — please log in'], 401);
+    }
+    if (!empty($_SESSION['must_change_password'])) {
+        json_response(['error' => 'Password change required before accessing administration features'], 403);
     }
 }
 
@@ -45,21 +55,95 @@ function verify_csrf(): void {
     }
 }
 
-function check_login_rate_limit(string $key = 'admin_login'): bool {
-    $now = time();
-    $attempts = $_SESSION['login_rate_' . $key] ?? [];
-    $attempts = array_filter($attempts, fn($t) => ($now - $t) < 900);
-    $_SESSION['login_rate_' . $key] = $attempts;
-    return count($attempts) < 5;
+function get_client_ip(): string {
+    $raw = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $parts = explode(',', $raw);
+    return trim($parts[0]);
 }
 
-function record_failed_login(string $key = 'admin_login'): void {
+function check_ip_rate_limit(string $action, int $maxAttempts = 5, int $windowSeconds = 900, ?string $ip = null): bool {
+    require_once __DIR__ . '/db.php';
+    $pdo = db();
+    $ip = $ip ?: get_client_ip();
     $now = time();
-    $attempts = $_SESSION['login_rate_' . $key] ?? [];
-    $attempts[] = $now;
-    $_SESSION['login_rate_' . $key] = $attempts;
+
+    try {
+        $stmt = $pdo->prepare("SELECT attempts, last_attempt, locked_until FROM rate_limits WHERE ip = ? AND action = ?");
+        $stmt->execute([$ip, $action]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            return true;
+        }
+
+        if ((int)$row['locked_until'] > $now) {
+            return false;
+        }
+
+        if (($now - (int)$row['last_attempt']) > $windowSeconds) {
+            return true;
+        }
+
+        return (int)$row['attempts'] < $maxAttempts;
+    } catch (Throwable) {
+        return true;
+    }
 }
 
-function reset_login_rate_limit(string $key = 'admin_login'): void {
-    unset($_SESSION['login_rate_' . $key]);
+function record_ip_failed_attempt(string $action, int $maxAttempts = 5, int $windowSeconds = 900, int $lockoutSeconds = 900, ?string $ip = null): void {
+    require_once __DIR__ . '/db.php';
+    $pdo = db();
+    $ip = $ip ?: get_client_ip();
+    $now = time();
+
+    try {
+        $stmt = $pdo->prepare("SELECT attempts, last_attempt FROM rate_limits WHERE ip = ? AND action = ?");
+        $stmt->execute([$ip, $action]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            $ins = $pdo->prepare("INSERT INTO rate_limits (ip, action, attempts, last_attempt, locked_until) VALUES (?, ?, 1, ?, 0)");
+            $ins->execute([$ip, $action, $now]);
+            return;
+        }
+
+        $attempts = (int)$row['attempts'];
+        if (($now - (int)$row['last_attempt']) > $windowSeconds) {
+            $attempts = 0;
+        }
+        $attempts++;
+
+        $lockedUntil = 0;
+        if ($attempts >= $maxAttempts) {
+            $lockedUntil = $now + $lockoutSeconds;
+        }
+
+        $upd = $pdo->prepare("UPDATE rate_limits SET attempts = ?, last_attempt = ?, locked_until = ? WHERE ip = ? AND action = ?");
+        $upd->execute([$attempts, $now, $lockedUntil, $ip, $action]);
+    } catch (Throwable) {
+        // Fallback gracefully
+    }
+}
+
+function reset_ip_rate_limit(string $action, ?string $ip = null): void {
+    require_once __DIR__ . '/db.php';
+    $pdo = db();
+    $ip = $ip ?: get_client_ip();
+    try {
+        $del = $pdo->prepare("DELETE FROM rate_limits WHERE ip = ? AND action = ?");
+        $del->execute([$ip, $action]);
+    } catch (Throwable) {
+    }
+}
+
+function check_login_rate_limit(string $key = 'admin_login', ?string $ip = null): bool {
+    return check_ip_rate_limit($key, 5, 900, $ip);
+}
+
+function record_failed_login(string $key = 'admin_login', ?string $ip = null): void {
+    record_ip_failed_attempt($key, 5, 900, 900, $ip);
+}
+
+function reset_login_rate_limit(string $key = 'admin_login', ?string $ip = null): void {
+    reset_ip_rate_limit($key, $ip);
 }

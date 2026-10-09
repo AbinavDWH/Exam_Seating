@@ -4,7 +4,7 @@ $pdo = db();
 
 $exams = $pdo->query("
     SELECT e.*,
-      (SELECT COUNT(*) FROM students st WHERE st.exam_id = e.id) AS students,
+      (SELECT COUNT(DISTINCT se_stu.student_id) FROM student_exams se_stu WHERE se_stu.exam_id = e.id) AS students,
       (SELECT COUNT(*) FROM seating se  WHERE se.exam_id = e.id) AS assigned
     FROM exams e ORDER BY e.exam_date DESC")->fetchAll();
 

@@ -21,7 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $roll = strtoupper(trim((string)($_POST['roll_no'] ?? '')));
         $name = trim((string)($_POST['name'] ?? ''));
         $branch = strtoupper(trim((string)($_POST['branch'] ?? '')));
-        $sem = max(1, min(8, (int)($_POST['semester'] ?? 1)));
+        $sem = (int)($_POST['semester'] ?? 0);
+        if ($sem < 1 || $sem > 8) {
+            header('Location: students.php?toast=' . urlencode('Semester must be between 1 and 8'));
+            exit;
+        }
         $yr = (int)ceil($sem / 2);
         $dob = !empty($_POST['dob']) ? trim((string)$_POST['dob']) : '2005-01-01';
         $examCode = trim((string)($_POST['exam_code'] ?? ''));

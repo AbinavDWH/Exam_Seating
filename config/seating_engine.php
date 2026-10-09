@@ -140,17 +140,16 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         throw new RuntimeException("Exam with ID {$examId} not found.");
     }
 
-    // 2. Fetch assigned students via student_exams link table or students.exam_id
+    // 2. Fetch assigned students strictly from student_exams link table
     $stuStmt = $pdo->prepare("
         SELECT s.id, s.roll_no, s.name, s.branch, s.semester, s.year,
-               COALESCE(se.exam_code, s.exam_code) AS exam_code
-        FROM students s
-        LEFT JOIN student_exams se ON se.student_id = s.id AND se.exam_id = ?
-        WHERE se.exam_id = ? OR s.exam_id = ?
-        GROUP BY s.id
+               COALESCE(NULLIF(se.exam_code, ''), s.branch || '-S' || s.semester) AS exam_code
+        FROM student_exams se
+        JOIN students s ON s.id = se.student_id
+        WHERE se.exam_id = ?
         ORDER BY s.branch, s.semester, s.roll_no
     ");
-    $stuStmt->execute([$examId, $examId, $examId]);
+    $stuStmt->execute([$examId]);
     $rawStudents = $stuStmt->fetchAll();
 
     if (empty($rawStudents)) {
@@ -229,15 +228,16 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
             ");
             $pdo->beginTransaction();
             try {
+                $candidateNum = 101;
                 for ($k = 1; $k <= $numRooms; $k++) {
-                    $base = 100 + $k;
-                    $candidate = "Hall {$base}";
-                    $suffix = 1;
-                    while (isset($existingMap[$candidate]) || isset($existingMap[(string)$base])) {
-                        $candidate = "Hall {$base}-{$suffix}";
-                        $suffix++;
+                    while (isset($existingMap[(string)$candidateNum]) || isset($existingMap["Hall {$candidateNum}"])) {
+                        $candidateNum++;
                     }
+                    $candidate = (string)$candidateNum;
                     $existingMap[$candidate] = true;
+                    $existingMap["Hall {$candidate}"] = true;
+                    $candidateNum++;
+
                     $blockNum = (int)ceil($k / 20);
                     $block = "Custom Block " . chr(64 + ($blockNum % 26 ?: 1));
                     $insert->execute([$candidate, $block, $cap, $benchesPerRoom, $studentsPerBench]);

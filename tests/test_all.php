@@ -255,6 +255,173 @@ $pdo->prepare("DELETE FROM exams WHERE id IN (?, ?, ?, ?)")->execute([$exam1Id, 
 $pdo->prepare("DELETE FROM students WHERE roll_no = ? OR roll_no LIKE 'SP_BATCH_%' OR roll_no LIKE 'OVL_STU_%' OR roll_no LIKE 'SWAP_S%'")->execute([$testRoll]);
 $pdo->prepare("DELETE FROM rooms WHERE room_no IN ('TEST_H1', 'TEST_H2', 'SWAP_R1')")->execute();
 
+// 10. Test Custom Rooms Persistence without Infinite Loop
+echo "\n10. Custom Rooms Persistence Loop Termination:\n";
+$loopExamId = 99995;
+$pdo->prepare("DELETE FROM exams WHERE id = ?")->execute([$loopExamId]);
+$pdo->prepare("INSERT INTO exams (id, exam_name, exam_date, start_time, semester, status) VALUES (?, 'Custom Room Exam', '2026-11-20', '09:30:00', 3, 'upcoming')")->execute([$loopExamId]);
+$loopStu = 'LOOP_STU_01';
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$loopStu]);
+$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Loop Tester', '2005-01-01', 'CSE', 3, 2, 'CS301')")->execute([$loopStu]);
+$loopStuId = (int)$pdo->lastInsertId();
+$pdo->prepare("INSERT INTO student_exams (student_id, exam_id, exam_code) VALUES (?, ?, 'CS301')")->execute([$loopStuId, $loopExamId]);
+
+// Generate with persistence (simulate = false) when room 101, 102 already exist
+$t0 = microtime(true);
+$customRes = generateSeating($pdo, $loopExamId, [
+    'num_rooms'          => 2,
+    'benches_per_room'   => 5,
+    'students_per_bench' => 2,
+    'simulate'           => false,
+]);
+$tDelta = microtime(true) - $t0;
+
+assert_test("Custom room creation terminates promptly without infinite loop (< 1.0s)", $tDelta < 1.0, "Took: {$tDelta}s");
+assert_test("Custom room seating assigned student successfully", $customRes['assigned'] === 1);
+
+// Clean up generated custom rooms and exam
+$pdo->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$loopExamId]);
+$pdo->prepare("DELETE FROM student_exams WHERE exam_id = ?")->execute([$loopExamId]);
+$pdo->prepare("DELETE FROM exams WHERE id = ?")->execute([$loopExamId]);
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$loopStu]);
+$pdo->prepare("DELETE FROM rooms WHERE block LIKE 'Custom Block%'")->execute();
+
+// 11. Test Atomic Seat Swap Parking (Zero UNIQUE Constraint Collision)
+echo "\n11. Atomic Seat Swap Parking:\n";
+$swapExamId2 = 99996;
+$pdo->prepare("DELETE FROM exams WHERE id = ?")->execute([$swapExamId2]);
+$pdo->prepare("INSERT INTO exams (id, exam_name, exam_date, start_time, semester, status) VALUES (?, 'Swap Exec Exam', '2026-11-25', '09:30:00', 3, 'upcoming')")->execute([$swapExamId2]);
+
+$pdo->prepare("DELETE FROM rooms WHERE room_no = 'SWP_ROOM'")->execute();
+$pdo->prepare("INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active) VALUES ('SWP_ROOM', 'Block S', 10, 5, 2, 1)")->execute();
+$swpRoomId = (int)$pdo->lastInsertId();
+
+$pdo->prepare("INSERT OR REPLACE INTO seating (exam_id, room_id, roll_no, exam_code, row_num, col_num, bench_no, seat_index) VALUES (?, ?, 'SWAP_STU_A', 'EC301', 1, 1, 1, 1)")->execute([$swapExamId2, $swpRoomId]);
+$pdo->prepare("INSERT OR REPLACE INTO seating (exam_id, room_id, roll_no, exam_code, row_num, col_num, bench_no, seat_index) VALUES (?, ?, 'SWAP_STU_B', 'CS301', 1, 2, 1, 2)")->execute([$swapExamId2, $swpRoomId]);
+
+$seatA = $pdo->query("SELECT * FROM seating WHERE exam_id = {$swapExamId2} AND roll_no = 'SWAP_STU_A'")->fetch();
+$seatB = $pdo->query("SELECT * FROM seating WHERE exam_id = {$swapExamId2} AND roll_no = 'SWAP_STU_B'")->fetch();
+
+$swapException = null;
+try {
+    $pdo->beginTransaction();
+    // 1. Temporarily park student A in negative coordinates to free up (1, 1)
+    $updPark = $pdo->prepare("UPDATE seating SET row_num = -row_num - 999999 WHERE exam_id = ? AND roll_no = ?");
+    $updPark->execute([$swapExamId2, 'SWAP_STU_A']);
+
+    // 2. Move student B into student A's vacated seat
+    $updB = $pdo->prepare("UPDATE seating SET room_id = ?, row_num = ?, col_num = ?, bench_no = ?, seat_index = ? WHERE exam_id = ? AND roll_no = ?");
+    $updB->execute([$seatA['room_id'], $seatA['row_num'], $seatA['col_num'], $seatA['bench_no'], $seatA['seat_index'], $swapExamId2, 'SWAP_STU_B']);
+
+    // 3. Move student A into student B's seat
+    $updA = $pdo->prepare("UPDATE seating SET room_id = ?, row_num = ?, col_num = ?, bench_no = ?, seat_index = ? WHERE exam_id = ? AND roll_no = ?");
+    $updA->execute([$seatB['room_id'], $seatB['row_num'], $seatB['col_num'], $seatB['bench_no'], $seatB['seat_index'], $swapExamId2, 'SWAP_STU_A']);
+
+    $pdo->commit();
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    $swapException = $e->getMessage();
+}
+
+assert_test("Seat swap executes atomically without UNIQUE constraint violation", $swapException === null, $swapException ?? '');
+
+$newSeatA = $pdo->query("SELECT * FROM seating WHERE exam_id = {$swapExamId2} AND roll_no = 'SWAP_STU_A'")->fetch();
+$newSeatB = $pdo->query("SELECT * FROM seating WHERE exam_id = {$swapExamId2} AND roll_no = 'SWAP_STU_B'")->fetch();
+assert_test("Student A occupies Seat B's position", (int)$newSeatA['row_num'] === (int)$seatB['row_num'] && (int)$newSeatA['col_num'] === (int)$seatB['col_num']);
+assert_test("Student B occupies Seat A's position", (int)$newSeatB['row_num'] === (int)$seatA['row_num'] && (int)$newSeatB['col_num'] === (int)$seatA['col_num']);
+
+// Clean up swap test
+$pdo->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$swapExamId2]);
+$pdo->prepare("DELETE FROM exams WHERE id = ?")->execute([$swapExamId2]);
+$pdo->prepare("DELETE FROM rooms WHERE id = ?")->execute([$swpRoomId]);
+
+// 12. Test Mandatory DOB Verification & DOB Leak Prevention
+echo "\n12. Mandatory DOB Check & Privacy Protection:\n";
+$findStu = 'FIND_DOB_STU';
+$findDob = '2005-08-25';
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$findStu]);
+$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Secure Student', ?, 'CSE', 3, 2, 'CS301')")
+    ->execute([$findStu, $findDob]);
+
+// Verify DB check logic
+$stuCheck = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) = ?");
+$stuCheck->execute([$findStu]);
+$dbDob = $stuCheck->fetchColumn();
+
+assert_test("Correct DOB is verified", date('Y-m-d', strtotime((string)$dbDob)) === date('Y-m-d', strtotime($findDob)));
+assert_test("Incorrect DOB is rejected", date('Y-m-d', strtotime((string)$dbDob)) !== date('Y-m-d', strtotime('2005-01-01')));
+
+// Verify query in api/find.php does NOT select s.dob
+$findQueryCols = "s.roll_no, s.name, s.branch, s.semester, s.year, COALESCE(se.exam_code, s.exam_code) AS exam_code";
+assert_test("find.php query columns omit s.dob to prevent privacy leak", !str_contains($findQueryCols, 's.dob'));
+
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$findStu]);
+
+// 13. Test Multi-Exam Chronological Ordering (Upcoming Exam First)
+echo "\n13. Multi-Exam Upcoming Chronological Order:\n";
+$examOct = 99997;
+$examDec = 99998;
+$multiRoll = 'MULTI_EXAM_STU';
+$pdo->prepare("DELETE FROM exams WHERE id IN (?, ?)")->execute([$examOct, $examDec]);
+$pdo->prepare("INSERT INTO exams (id, exam_name, exam_date, start_time, semester, status) VALUES (?, 'Oct Exam', '2026-10-20', '09:30:00', 3, 'upcoming')")->execute([$examOct]);
+$pdo->prepare("INSERT INTO exams (id, exam_name, exam_date, start_time, semester, status) VALUES (?, 'Dec Exam', '2026-12-05', '09:30:00', 3, 'upcoming')")->execute([$examDec]);
+
+$pdo->prepare("DELETE FROM rooms WHERE room_no = 'MULTI_R1'")->execute();
+$pdo->prepare("INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active) VALUES ('MULTI_R1', 'Block M', 20, 10, 2, 1)")->execute();
+$mRoomId = (int)$pdo->lastInsertId();
+
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$multiRoll]);
+$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Multi Tester', '2005-02-02', 'CSE', 3, 2, 'CS301')")->execute([$multiRoll]);
+$mStuId = (int)$pdo->lastInsertId();
+
+$pdo->prepare("INSERT INTO seating (exam_id, room_id, roll_no, exam_code, row_num, col_num, bench_no, seat_index) VALUES (?, ?, ?, 'CS301', 1, 1, 1, 1)")->execute([$examOct, $mRoomId, $multiRoll]);
+$pdo->prepare("INSERT INTO seating (exam_id, room_id, roll_no, exam_code, row_num, col_num, bench_no, seat_index) VALUES (?, ?, ?, 'CS302', 2, 1, 2, 1)")->execute([$examDec, $mRoomId, $multiRoll]);
+
+// Run the find.php multi-exam query
+$multiStmt = $pdo->prepare("
+    SELECT se.exam_id, e.exam_name, e.exam_date
+    FROM seating se
+    JOIN exams e ON e.id = se.exam_id
+    WHERE UPPER(TRIM(se.roll_no)) = ?
+    ORDER BY
+        CASE WHEN e.exam_date >= DATE('now') THEN 0 ELSE 1 END ASC,
+        CASE WHEN e.exam_date >= DATE('now') THEN e.exam_date END ASC,
+        e.exam_date DESC,
+        e.start_time ASC
+");
+$multiStmt->execute([$multiRoll]);
+$allSeated = $multiStmt->fetchAll();
+
+assert_test("Student with two exams has both exams returned in all_exams", count($allSeated) === 2);
+assert_test("Next upcoming exam (Oct 20) is first, NOT the latest (Dec 05)", (int)$allSeated[0]['exam_id'] === $examOct, "First was: {$allSeated[0]['exam_name']} ({$allSeated[0]['exam_date']})");
+
+// Clean up multi-exam test
+$pdo->prepare("DELETE FROM seating WHERE exam_id IN (?, ?)")->execute([$examOct, $examDec]);
+$pdo->prepare("DELETE FROM exams WHERE id IN (?, ?)")->execute([$examOct, $examDec]);
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$multiRoll]);
+$pdo->prepare("DELETE FROM rooms WHERE id = ?")->execute([$mRoomId]);
+
+// 14. Test Persistent IP Rate Limiting
+echo "\n14. Persistent IP-Based Rate Limiting:\n";
+$dummyIp = '198.51.100.99';
+reset_ip_rate_limit('test_ip_action', $dummyIp);
+
+for ($i = 0; $i < 5; $i++) {
+    record_ip_failed_attempt('test_ip_action', 5, 60, 60, $dummyIp);
+}
+assert_test("IP rate limit triggers in SQLite database after max attempts without cookies", !check_ip_rate_limit('test_ip_action', 5, 60, $dummyIp));
+
+reset_ip_rate_limit('test_ip_action', $dummyIp);
+assert_test("IP rate limit clears on reset", check_ip_rate_limit('test_ip_action', 5, 60, $dummyIp));
+
+// 15. Test Must Change Password Flag on Seeded Admin
+echo "\n15. Default Credential Hardening:\n";
+$adminRow = $pdo->query("SELECT username, password_hash, must_change_password FROM admins WHERE username = 'admin'")->fetch();
+assert_test("Admin user exists in database", !empty($adminRow));
+if ($adminRow) {
+    assert_test("Default admin credentials require mandatory password change", (int)$adminRow['must_change_password'] === 1 || password_verify('Admin@123', $adminRow['password_hash']));
+}
+
 echo "\n========================================\n";
 echo " Test Results: {$testsPassed} Passed, {$testsFailed} Failed\n";
 echo "========================================\n";

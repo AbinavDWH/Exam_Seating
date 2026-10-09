@@ -38,11 +38,12 @@ if (!empty($_FILES['file']['tmp_name'])) {
 }
 
 function parse_csv_student_line(array $line): array {
+    $sem = isset($line[3]) && trim((string)$line[3]) !== '' ? (int)$line[3] : 1;
     return [
         'roll_no'   => strtoupper(trim((string)$line[0])),
         'name'      => trim((string)$line[1]),
         'branch'    => strtoupper(trim((string)$line[2])),
-        'semester'  => isset($line[3]) && $line[3] !== '' ? max(1, min(8, (int)$line[3])) : 1,
+        'semester'  => $sem,
         'exam_id'   => isset($line[4]) && trim((string)$line[4]) !== '' ? (int)$line[4] : null,
         'exam_code' => isset($line[5]) && trim((string)$line[5]) !== '' ? trim((string)$line[5]) : null,
         'dob'       => isset($line[6]) && trim((string)$line[6]) !== '' ? trim((string)$line[6]) : null,
@@ -87,7 +88,11 @@ try {
         $roll = strtoupper(trim((string)$r['roll_no']));
         $name = trim((string)$r['name']);
         $branch = strtoupper(trim((string)$r['branch']));
-        $sem = max(1, min(8, (int)($r['semester'] ?? 1)));
+        $sem = (int)($r['semester'] ?? 1);
+        if ($sem < 1 || $sem > 8) {
+            $skipped++;
+            continue;
+        }
         $yr = (int)ceil($sem / 2);
         $dob = !empty($r['dob']) ? trim((string)$r['dob']) : null;
         $examCode = !empty($r['exam_code']) ? trim((string)$r['exam_code']) : null;

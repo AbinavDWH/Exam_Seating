@@ -143,16 +143,25 @@ if (!empty($clashes) && !$force) {
     ], 409);
 }
 
-// Execute swap atomically
+// Execute swap atomically by parking student A in temporary coordinates first to avoid UNIQUE constraint violation
 $pdo->beginTransaction();
 try {
-    $upd = $pdo->prepare("UPDATE seating SET room_id=?, row_num=?, col_num=?, bench_no=?, seat_index=? WHERE exam_id=? AND roll_no=?");
-    $upd->execute([$b['room_id'], $b['row_num'], $b['col_num'], $b['bench_no'], $b['seat_index'], $examId, $rollA]);
-    $upd->execute([$a['room_id'], $a['row_num'], $a['col_num'], $a['bench_no'], $a['seat_index'], $examId, $rollB]);
+    // 1. Temporarily park student A in negative coordinates
+    $tempPark = $pdo->prepare("UPDATE seating SET row_num = -row_num - 999999 WHERE id = ?");
+    $tempPark->execute([$a['id']]);
+
+    // 2. Move student B into student A's original seat
+    $updB = $pdo->prepare("UPDATE seating SET room_id=?, row_num=?, col_num=?, bench_no=?, seat_index=? WHERE id=?");
+    $updB->execute([$a['room_id'], $a['row_num'], $a['col_num'], $a['bench_no'], $a['seat_index'], $b['id']]);
+
+    // 3. Move student A from temporary coordinates into student B's original seat
+    $updA = $pdo->prepare("UPDATE seating SET room_id=?, row_num=?, col_num=?, bench_no=?, seat_index=? WHERE id=?");
+    $updA->execute([$b['room_id'], $b['row_num'], $b['col_num'], $b['bench_no'], $b['seat_index'], $a['id']]);
+
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    throw $e;
+    json_response(['error' => 'Database seat swap failed: ' . $e->getMessage()], 500);
 }
 
 json_response([
