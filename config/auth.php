@@ -12,12 +12,47 @@ function is_admin(): bool {
     return !empty($_SESSION['admin_id']);
 }
 
+function validate_password_strength(string $password): ?string {
+    if (strlen($password) < 8) {
+        return 'New password must be at least 8 characters long.';
+    }
+    if ($password === 'Admin@123') {
+        return 'You cannot keep the default password. Please choose a strong, unique password.';
+    }
+    if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        return 'Password must contain at least one uppercase letter, one lowercase letter, and one number.';
+    }
+    return null;
+}
+
+function admin_must_change_password(?int $adminId = null): bool {
+    if (!empty($_SESSION['must_change_password'])) {
+        return true;
+    }
+    $adminId = $adminId ?: (int)($_SESSION['admin_id'] ?? 0);
+    if ($adminId <= 0) {
+        return false;
+    }
+    try {
+        require_once __DIR__ . '/db.php';
+        $stmt = db()->prepare("SELECT must_change_password, password_hash FROM admins WHERE id = ?");
+        $stmt->execute([$adminId]);
+        $row = $stmt->fetch();
+        if ($row && (!empty($row['must_change_password']) || password_verify('Admin@123', (string)$row['password_hash']))) {
+            $_SESSION['must_change_password'] = true;
+            return true;
+        }
+    } catch (Throwable) {
+    }
+    return false;
+}
+
 function require_admin(): void {
     if (!is_admin()) {
         header('Location: login.php');
         exit;
     }
-    if (!empty($_SESSION['must_change_password'])) {
+    if (admin_must_change_password()) {
         $curr = basename($_SERVER['PHP_SELF'] ?? '');
         if ($curr !== 'change_password.php' && $curr !== 'logout.php') {
             header('Location: change_password.php');
@@ -30,7 +65,7 @@ function require_admin_api(): void {
     if (!is_admin()) {
         json_response(['error' => 'Unauthorized — please log in'], 401);
     }
-    if (!empty($_SESSION['must_change_password'])) {
+    if (admin_must_change_password()) {
         json_response(['error' => 'Password change required before accessing administration features'], 403);
     }
 }

@@ -34,11 +34,19 @@ session_regenerate_id(true);
 $_SESSION['admin_id']  = $admin['id'];
 $_SESSION['admin_user'] = $admin['username'];
 
+$mustChange = !empty($admin['must_change_password']) || password_verify('Admin@123', (string)$admin['password_hash']);
+if ($mustChange) {
+    $_SESSION['must_change_password'] = true;
+} else {
+    unset($_SESSION['must_change_password']);
+}
+
 json_response([
     'success' => true,
     'data' => [
         'username' => $admin['username'],
         'role' => $admin['role'] ?? 'admin',
+        'must_change_password' => $mustChange,
         'csrf_token' => csrf_token(),
     ],
 ]);

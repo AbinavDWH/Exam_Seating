@@ -37,8 +37,9 @@ function svg_icon(string $name, string $class = '', int $size = 20, float $strok
         'magic' => '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/>',
         'sparkles' => '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/>',
         
-        // Brand & System
-        'cap' => '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+        // Brand & System: Minimalist Geometric Seating Grid (3x3 desks with 1 allocated seat)
+        'seat-grid' => '<rect x="4" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="4" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="10" width="4" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="4" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/>',
+        'cap' => '<rect x="4" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="4" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="10" width="4" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="4" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="10" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/><rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35" stroke="none"/>',
         'box-arrow-up-right' => '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
         'box-arrow-right' => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
         
@@ -62,6 +63,9 @@ function svg_icon(string $name, string $class = '', int $size = 20, float $strok
         'sort' => '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
         'sort-asc' => '<path d="m7 10 5-5 5 5"/><line x1="12" y1="5" x2="12" y2="19"/>',
         'sort-desc' => '<path d="m7 14 5 5 5-5"/><line x1="12" y1="5" x2="12" y2="19"/>',
+        'move' => '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+        'swap' => '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+        'arrow-left-right' => '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
     ];
 
     $inner = $icons[$name] ?? '<circle cx="12" cy="12" r="10"/>';

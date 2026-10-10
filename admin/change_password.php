@@ -12,19 +12,25 @@ $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
+    $currentPass = (string)($_POST['current_password'] ?? '');
     $newPass = (string)($_POST['new_password'] ?? '');
     $confirmPass = (string)($_POST['confirm_password'] ?? '');
 
-    if (strlen($newPass) < 8) {
-        $error = 'New password must be at least 8 characters long.';
-    } elseif ($newPass === 'Admin@123') {
-        $error = 'You cannot keep the default password. Please choose a strong, unique password.';
+    $adminId = (int)$_SESSION['admin_id'];
+    $stmt = db()->prepare("SELECT * FROM admins WHERE id = ?");
+    $stmt->execute([$adminId]);
+    $admin = $stmt->fetch();
+
+    if (!$admin || !password_verify($currentPass, (string)$admin['password_hash'])) {
+        $error = 'Current password is incorrect.';
+    } elseif ($newPass === $currentPass) {
+        $error = 'New password cannot be the same as your current password.';
+    } elseif ($strengthErr = validate_password_strength($newPass)) {
+        $error = $strengthErr;
     } elseif ($newPass !== $confirmPass) {
         $error = 'Passwords do not match. Please verify and retype.';
     } else {
         $hash = password_hash($newPass, PASSWORD_DEFAULT);
-        $adminId = (int)$_SESSION['admin_id'];
-
         $upd = db()->prepare("UPDATE admins SET password_hash = ?, must_change_password = 0 WHERE id = ?");
         $upd->execute([$hash, $adminId]);
 
@@ -68,8 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="d-inline-flex align-items-center justify-content-center p-3 rounded-circle mb-3" style="background:#fef2f2; color:#ef4444; width:64px; height:64px;">
       <i class="bi bi-shield-lock-fill fs-2"></i>
     </div>
-    <h3 class="fw-bold mb-1">Set New Password</h3>
-    <p class="text-muted small">Default credentials detected. For security, please choose a strong administrator password before continuing.</p>
+    <h3 class="fw-bold mb-1"><?= !empty($_SESSION['must_change_password']) ? 'Set New Password' : 'Change Password' ?></h3>
+    <p class="text-muted small"><?= !empty($_SESSION['must_change_password']) ? 'Default credentials detected. For security, please choose a strong administrator password before continuing.' : 'Enter your current password and choose a strong new password.' ?></p>
   </div>
 
   <?php if ($error): ?>
@@ -82,12 +88,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <form method="post" action="change_password.php">
     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
     <div class="mb-3">
+      <label class="form-label small fw-semibold">Current Password</label>
+      <input type="password" name="current_password" class="form-control" placeholder="Enter current password" required autofocus>
+    </div>
+    <div class="mb-3">
       <label class="form-label small fw-semibold">New Password</label>
-      <input type="password" name="new_password" class="form-control" placeholder="Minimum 8 characters" required autofocus minlength="8">
+      <input type="password" name="new_password" class="form-control" placeholder="Minimum 8 characters (mixed case & numbers)" required minlength="8">
+      <div class="form-text text-muted" style="font-size:0.78rem;">Must contain at least 8 characters, an uppercase letter, a lowercase letter, and a number.</div>
     </div>
     <div class="mb-4">
       <label class="form-label small fw-semibold">Confirm New Password</label>
-      <input type="password" name="confirm_password" class="form-control" placeholder="Re-enter password" required minlength="8">
+      <input type="password" name="confirm_password" class="form-control" placeholder="Re-enter new password" required minlength="8">
     </div>
     <button class="btn btn-grad w-100 py-2.5 mb-3" type="submit">
       Save Password &amp; Continue →

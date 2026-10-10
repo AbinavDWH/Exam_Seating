@@ -422,6 +422,97 @@ if ($adminRow) {
     assert_test("Default admin credentials require mandatory password change", (int)$adminRow['must_change_password'] === 1 || password_verify('Admin@123', $adminRow['password_hash']));
 }
 
+// 16. Test Change Password Verification & Strength Enforcement (Item 1)
+echo "\n16. Change Password Verification & Strength Enforcement:\n";
+require_once __DIR__ . '/../config/auth.php';
+
+// Check strength validation helper
+assert_test("Weak password 'password1' without uppercase is rejected", validate_password_strength('password1') !== null);
+assert_test("Short password under 8 characters is rejected", validate_password_strength('Admin1') !== null);
+assert_test("Default password 'Admin@123' is rejected", validate_password_strength('Admin@123') !== null);
+assert_test("Strong password 'AdminSecure#2026' is accepted", validate_password_strength('AdminSecure#2026') === null);
+
+// Check current password verification against DB
+$testAdminUser = 'test_pwd_admin';
+$pdo->prepare("DELETE FROM admins WHERE username = ?")->execute([$testAdminUser]);
+$initialHash = password_hash('Admin@123', PASSWORD_DEFAULT);
+$pdo->prepare("INSERT INTO admins (username, password_hash, must_change_password) VALUES (?, ?, 1)")->execute([$testAdminUser, $initialHash]);
+$testAdminId = (int)$pdo->lastInsertId();
+
+$adminData = $pdo->query("SELECT * FROM admins WHERE id = {$testAdminId}")->fetch();
+assert_test("Incorrect current password verification fails", !password_verify('WrongPassword', (string)$adminData['password_hash']));
+assert_test("Correct current password verification succeeds", password_verify('Admin@123', (string)$adminData['password_hash']));
+
+// Simulate successful update
+$newHash = password_hash('AdminSecure#2026', PASSWORD_DEFAULT);
+$pdo->prepare("UPDATE admins SET password_hash = ?, must_change_password = 0 WHERE id = ?")->execute([$newHash, $testAdminId]);
+$adminDataUpdated = $pdo->query("SELECT * FROM admins WHERE id = {$testAdminId}")->fetch();
+assert_test("Password update clears must_change_password flag", (int)$adminDataUpdated['must_change_password'] === 0);
+assert_test("New password verifies against updated hash", password_verify('AdminSecure#2026', (string)$adminDataUpdated['password_hash']));
+
+// Clean up test admin
+$pdo->prepare("DELETE FROM admins WHERE id = ?")->execute([$testAdminId]);
+
+// 17. Test Admin API Guard Block Until Password Changed (Item 2)
+echo "\n17. Admin API Guard Block Until Password Changed:\n";
+$apiAdminUser = 'test_api_admin';
+$pdo->prepare("DELETE FROM admins WHERE username = ?")->execute([$apiAdminUser]);
+$pdo->prepare("INSERT INTO admins (username, password_hash, must_change_password) VALUES (?, ?, 1)")
+    ->execute([$apiAdminUser, password_hash('Admin@123', PASSWORD_DEFAULT)]);
+$apiAdminId = (int)$pdo->lastInsertId();
+
+$_SESSION['admin_id'] = $apiAdminId;
+$_SESSION['admin_user'] = $apiAdminUser;
+unset($_SESSION['must_change_password']);
+
+// admin_must_change_password() must return true because user has must_change_password=1 / default password
+$mustChangeBlocked = admin_must_change_password($apiAdminId);
+assert_test("Admin API guard detects mandatory password change from database", $mustChangeBlocked === true);
+assert_test("Session must_change_password flag is set when detected", !empty($_SESSION['must_change_password']));
+
+// Now update password to clear must_change_password
+$pdo->prepare("UPDATE admins SET password_hash = ?, must_change_password = 0 WHERE id = ?")
+    ->execute([password_hash('NewStrongPass#2026', PASSWORD_DEFAULT), $apiAdminId]);
+unset($_SESSION['must_change_password']);
+
+$mustChangeAllowed = admin_must_change_password($apiAdminId);
+assert_test("Admin API guard allows access once password is changed", $mustChangeAllowed === false);
+
+// Clean up
+$pdo->prepare("DELETE FROM admins WHERE id = ?")->execute([$apiAdminId]);
+unset($_SESSION['admin_id'], $_SESSION['admin_user'], $_SESSION['must_change_password']);
+
+// 18. Test Room API Privacy & DOB Enforcement:
+echo "\n18. Room API DOB Verification & Privacy Protection:\n";
+$roomStuRoll = 'ROOM_DOB_STU';
+$roomStuDob = '2004-11-20';
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$roomStuRoll]);
+$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Room Test Student', ?, 'CSE', 3, 2, 'CS301')")
+    ->execute([$roomStuRoll, $roomStuDob]);
+
+$stuDobQuery = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) = ?");
+$stuDobQuery->execute([$roomStuRoll]);
+$actualDbDob = $stuDobQuery->fetchColumn();
+
+assert_test("Room search DOB mismatch is rejected", date('Y-m-d', strtotime((string)$actualDbDob)) !== date('Y-m-d', strtotime('2005-01-01')));
+assert_test("Room search correct DOB is validated", date('Y-m-d', strtotime((string)$actualDbDob)) === date('Y-m-d', strtotime($roomStuDob)));
+
+$pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$roomStuRoll]);
+
+// 19. Test Student Upload Rejection Without Valid DOB:
+echo "\n19. CSV Student Upload DOB Enforcement:\n";
+$rowWithoutDob = ['roll_no' => 'NODOB_1', 'name' => 'No Dob Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => null];
+$isRejectedNoDob = empty($rowWithoutDob['dob']) || strtotime((string)$rowWithoutDob['dob']) === false;
+assert_test("CSV student row without DOB is rejected", $isRejectedNoDob === true);
+
+$rowWithInvalidDob = ['roll_no' => 'NODOB_2', 'name' => 'Bad Dob Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => 'invalid-date'];
+$isRejectedBadDob = empty($rowWithInvalidDob['dob']) || strtotime((string)$rowWithInvalidDob['dob']) === false;
+assert_test("CSV student row with invalid date string is rejected", $isRejectedBadDob === true);
+
+$rowWithValidDob = ['roll_no' => 'VALIDDOB_1', 'name' => 'Valid Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => '2005-06-15'];
+$isAcceptedValidDob = !empty($rowWithValidDob['dob']) && strtotime((string)$rowWithValidDob['dob']) !== false;
+assert_test("CSV student row with valid DOB is accepted", $isAcceptedValidDob === true);
+
 echo "\n========================================\n";
 echo " Test Results: {$testsPassed} Passed, {$testsFailed} Failed\n";
 echo "========================================\n";

@@ -7,13 +7,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
 
-// Persistent IP-based rate limiting: max 20 searches per minute per IP
-$clientIp = get_client_ip();
-if (!check_ip_rate_limit('seat_search', 20, 60, $clientIp)) {
-    json_response(['error' => 'Too many search requests. Please wait a moment before searching again.'], 429);
-}
-record_ip_failed_attempt('seat_search', 20, 60, 60, $clientIp);
-
 $roll = strtoupper(trim((string)($_GET['roll'] ?? '')));
 $dob = trim((string)($_GET['dob'] ?? ''));
 $examId = (int)($_GET['exam_id'] ?? 0);
@@ -26,6 +19,17 @@ if ($dob === '') {
     json_response(['error' => 'Date of birth is required for identity verification'], 400);
 }
 
+// Persistent rate limiting:
+// 1) Per-roll limit (keyed by client IP + roll) to prevent brute-forcing DOB for a specific student: 30 attempts / min
+// 2) Campus network protection: raise general IP rate limit to 300 attempts / min so shared Wi-Fi NAT never locks out students
+$clientIp = get_client_ip();
+$rollKey = 'search_roll:' . substr($roll, 0, 36);
+if (!check_ip_rate_limit($rollKey, 30, 60, $clientIp) || !check_ip_rate_limit('seat_search_ip', 300, 60, $clientIp)) {
+    json_response(['error' => 'Too many search requests. Please wait a moment before searching again.'], 429);
+}
+record_ip_failed_attempt($rollKey, 30, 60, 60, $clientIp);
+record_ip_failed_attempt('seat_search_ip', 300, 60, 60, $clientIp);
+
 $pdo = db();
 
 // Mandatory verification: check Date of Birth against student record
@@ -33,15 +37,18 @@ $stuCheck = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) =
 $stuCheck->execute([$roll]);
 $actualDob = $stuCheck->fetchColumn();
 
-if ($actualDob === false || $actualDob === null) {
-    json_response(['error' => "No student found with roll number '{$roll}'"], 404);
+// Unified error message to prevent roll-number enumeration/guessing
+$noMatchMsg = 'No student found matching the provided roll number and date of birth.';
+
+if ($actualDob === false || $actualDob === null || trim((string)$actualDob) === '' || strtotime((string)$actualDob) === false || strtotime($dob) === false) {
+    json_response(['error' => $noMatchMsg], 404);
 }
 
 // Compare dates in YYYY-MM-DD normalized format
 $actualNorm = date('Y-m-d', (int)strtotime((string)$actualDob));
 $inputNorm = date('Y-m-d', (int)strtotime($dob));
 if ($actualNorm !== $inputNorm) {
-    json_response(['error' => 'Date of birth does not match our records for this roll number.'], 403);
+    json_response(['error' => $noMatchMsg], 404);
 }
 
 // Fetch all seated exams for this student, ordered by next upcoming exam first

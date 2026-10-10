@@ -24,6 +24,12 @@ try {
     $pdo->exec("INSERT OR IGNORE INTO student_exams (student_id, exam_id, exam_code)
                 SELECT id, exam_id, exam_code FROM students WHERE exam_id IS NOT NULL;");
 
+    // Automatically load the university hall plan CSV dataset
+    $importScript = __DIR__ . '/import_csv_dataset.py';
+    if (file_exists($importScript)) {
+        passthru('python3 ' . escapeshellarg($importScript));
+    }
+
     echo "✅ Database initialized successfully at database/examseat.sqlite\n";
 } catch (PDOException $e) {
     exit("❌ Init failed: " . $e->getMessage() . "\n");

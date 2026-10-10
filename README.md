@@ -67,17 +67,18 @@ This concurrently starts:
 - **Username**: `admin`
 - **Password**: `Admin@123`
 
-### Sample Student Roll Numbers (for Student Seat Finder)
-| Roll Number | Name | Department | Semester / Year |
-|---|---|---|---|
-| `23CS101` | Aarav Sharma | CSE | Sem 3 (2nd Year) |
-| `23EC101` | Arjun Das | ECE | Sem 3 (2nd Year) |
-| `23ME101` | Vikram Pillai | MECH | Sem 3 (2nd Year) |
-| `23CE101` | Harsh Vardhan | CIVIL | Sem 3 (2nd Year) |
-| `22CS201` | Siddharth Roy | CSE | Sem 5 (3rd Year) |
-| `22IT101` | Bhavya Krishna | IT | Sem 5 (3rd Year) |
-| `22AD101` | Kunal Ghosh | AIDS | Sem 5 (3rd Year) |
-| `21EC301` | Abhishek Bachchan | ECE | Sem 7 (4th Year) |
+### Sample Student Register Numbers (CAT I - Slot I Dataset)
+| Register No | Name | Department | Semester / Year | Hall No | Subject Code |
+|---|---|---|---|---|---|
+| `2116241801001` | Vishal Rajan | AI&DS | Sem 5 (3rd Year) | ANEW101 | AD23532 |
+| `2116251001001` | Ishwarya Pillai | IT | Sem 3 (2nd Year) | ANEW101 | IT23331 |
+| `2116250701001` | Sai Sharma | CSE | Sem 3 (2nd Year) | B321 | CS23334 |
+| `2116241501001` | Gayathri Anand | AI&ML | Sem 5 (3rd Year) | B321 | AD23632 |
+| `2116251401001` | Bala Balakrishnan | CSBS | Sem 3 (2nd Year) | A204 | MC23313 |
+| `2116241101001` | Vasanth H. | MECH | Sem 5 (3rd Year) | B426 | ME23511 |
+| `2116240901001` | Shiva G. | EEE | Sem 5 (3rd Year) | C202 | EE23531 |
+| `2116240101001` | Sneha N. | AERO | Sem 5 (3rd Year) | A202 | AE23531 |
+*(Default DOB for verification: `2005-01-01`)*
 
 ---
 

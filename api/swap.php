@@ -12,6 +12,29 @@ $rollB    = strtoupper(trim($in['roll_b'] ?? ''));
 $checkOnly = !empty($in['check_only']);
 $force    = !empty($in['force']);
 
+// Support live instant student seat lookup (Item 21)
+if (($in['action'] ?? '') === 'lookup') {
+    $roll = strtoupper(trim($in['roll'] ?? ''));
+    if (!$examId || !$roll) {
+        json_response(['error' => 'exam_id and roll are required'], 400);
+    }
+    $stmt = db()->prepare("
+        SELECT se.*, s.name, s.branch, s.semester, s.year,
+               COALESCE(se.exam_code, s.exam_code) AS exam_code,
+               r.room_no, r.block
+        FROM seating se
+        JOIN students s ON s.roll_no = se.roll_no
+        JOIN rooms r    ON r.id = se.room_id
+        WHERE se.exam_id = ? AND UPPER(TRIM(se.roll_no)) = ?
+    ");
+    $stmt->execute([$examId, $roll]);
+    $stu = $stmt->fetch();
+    if (!$stu) {
+        json_response(['error' => 'No allocated seat found for this student in this exam.'], 404);
+    }
+    json_response(['success' => true, 'student' => $stu]);
+}
+
 if (!$examId || !$rollA || !$rollB) {
     json_response(['error' => 'exam_id, roll_a, and roll_b are required'], 400);
 }

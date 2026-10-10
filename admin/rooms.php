@@ -47,12 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0) {
             $pdo->prepare("UPDATE rooms SET active = 1 - active WHERE id = ?")->execute([$id]);
         }
-        header('Location: rooms.php?toast=' . urlencode('Hall status updated'));
+        header('Location: rooms.php?toast=' . urlencode('Hall status updated successfully'));
         exit;
     } elseif ($action === 'batch') {
         $count = max(1, min(5000, (int)($_POST['batch_rooms'] ?? 1)));
         $startNo = max(1, (int)($_POST['batch_start_no'] ?: 101));
-        $block = trim((string)($_POST['batch_block'] ?: 'Main Academic Block'));
+        $block = trim((string)($_POST['batch_block'] ?: 'Campus Exam Complex'));
         $rows = max(1, min(100, (int)($_POST['batch_rows'] ?? 15)));
         $cols = max(1, min(20, (int)($_POST['batch_cols'] ?? 2)));
         $cap = $rows * $cols;
@@ -116,12 +116,18 @@ $perPage = 50;
 $offset = ($page - 1) * $perPage;
 
 $q = trim($_GET['q'] ?? '');
+$activeFilter = $_GET['active'] ?? '';
 $whereSql = "WHERE 1";
 $params = [];
 if ($q !== '') {
     $whereSql .= " AND (r.room_no LIKE ? OR r.block LIKE ?)";
     $params[] = "%$q%";
     $params[] = "%$q%";
+}
+if ($activeFilter === '1') {
+    $whereSql .= " AND r.active = 1";
+} elseif ($activeFilter === '0') {
+    $whereSql .= " AND r.active = 0";
 }
 
 $totalRooms = (int)$pdo->query("SELECT COUNT(*) FROM rooms")->fetchColumn();
@@ -146,6 +152,7 @@ $stmt->execute($params);
 $rooms = $stmt->fetchAll();
 ?>
 
+<!-- Page Header with Separated Top-Right Stats (Point 11) -->
 <div class="page-header">
   <div>
     <h1 class="page-title">
@@ -153,186 +160,235 @@ $rooms = $stmt->fetchAll();
       Exam Halls &amp; Desk Layout
     </h1>
     <div class="page-subtitle">
-      <span>Configure classroom and examination hall capacities, rows, and seating arrangements</span>
+      <span>Configure classroom dimensions, bench capacities, and campus block allocations</span>
     </div>
   </div>
-  <div class="d-flex gap-2 flex-wrap">
-    <span class="badge bg-primary-subtle text-primary border py-2 px-3 fs-6 rounded-pill d-inline-flex align-items-center gap-1.5">
-      <?= svg_icon('building', '', 16) ?>
-      <strong><?= number_format($totalRooms) ?></strong> Total Halls (<?= number_format($activeCount) ?> Active)
-    </span>
-    <span class="badge bg-success-subtle text-success border py-2 px-3 fs-6 rounded-pill d-inline-flex align-items-center gap-1.5">
-      <?= svg_icon('grid', '', 16) ?>
-      <strong><?= number_format($totalCap) ?></strong> Desks Capacity
-    </span>
+  <div class="d-flex gap-3 flex-wrap">
+    <div class="stat-pill px-3 py-2 text-start" style="min-width: 150px;">
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Exam Halls</span>
+      <b style="font-size: 1.25rem; color: #0f172a; margin-top: 2px;"><?= number_format($totalRooms) ?></b>
+      <span class="text-muted small" style="font-size: 0.76rem;"><?= number_format($activeCount) ?> Active</span>
+    </div>
+    <div class="stat-pill px-3 py-2 text-start" style="min-width: 150px;">
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Desks Capacity</span>
+      <b style="font-size: 1.25rem; color: #ea580c; margin-top: 2px;"><?= number_format($totalCap) ?></b>
+      <span class="text-muted small" style="font-size: 0.76rem;">Active Seats</span>
+    </div>
   </div>
 </div>
 
 <div class="row g-4">
-  <div class="col-lg-4">
-    <!-- Single Room Card -->
+  <!-- Left Side: Hall Forms -->
+  <div class="col-lg-5">
+    <!-- Single Room Card with Mini Preview Grid (Points 13, 14, 15, 23, 24) -->
     <div class="table-card mb-4">
-      <div class="d-flex align-items-center gap-2 mb-2">
-        <div class="text-primary"><?= svg_icon('plus', '', 20) ?></div>
-        <h6 class="fw-bold mb-0">Add / Update Single Hall</h6>
+      <div class="card-title-header">
+        <div class="card-title-icon">
+          <?= svg_icon('plus', '', 20) ?>
+        </div>
+        <div class="card-title-text">
+          <h6>Add / Update Single Hall</h6>
+          <p>Configure bench rows and seats per desk for this hall.</p>
+        </div>
       </div>
-      <p class="text-muted small mb-3">Configure rows and columns of desks for this hall.</p>
-      <form method="post" action="rooms.php">
+
+      <form method="post" action="rooms.php" id="singleRoomForm">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-        <div class="mb-2">
-          <label class="form-label small fw-semibold">Hall Number</label>
-          <input name="room_no" class="form-control" placeholder="e.g. 101" value="101" required>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small fw-semibold">Block / Building</label>
-          <input name="block" class="form-control" placeholder="e.g. Main Block" value="Main Block">
-        </div>
-        <div class="row g-2 mb-3">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="room_no">Hall Number</label>
+            <input name="room_no" id="room_no" class="form-control" placeholder="e.g. 101" value="101" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="block">Block / Building</label>
+            <input name="block" id="block" class="form-control" placeholder="e.g. Main Block" value="Main Academic Block">
+          </div>
           <div class="col-6">
-            <label class="form-label small fw-semibold">Rows (Benches)</label>
+            <label class="form-label" for="rowsIn">Rows (Benches)</label>
             <input name="rows_count" id="rowsIn" type="number" min="1" max="100" class="form-control" value="15" required oninput="calcCap()">
           </div>
           <div class="col-6">
-            <label class="form-label small fw-semibold">Seats / Bench</label>
+            <label class="form-label" for="colsIn">Seats / Bench</label>
             <input name="cols_count" id="colsIn" type="number" min="1" max="20" class="form-control" value="2" required oninput="calcCap()">
           </div>
         </div>
-        <div class="p-2 mb-3 bg-light rounded text-center small text-muted border" id="capPreview">
-          Total: <strong>30 desks</strong> (15 rows × 2 seats/bench)
+
+        <!-- Highlighted Desk Chip (Point 23) -->
+        <div class="d-flex justify-content-between align-items-center my-3">
+          <div class="cap-highlight-chip" id="capPreview">
+            <span class="cap-dot"></span>
+            <span>Total: <strong id="capTotalNum">30</strong> desks</span>
+            <span class="cap-calc-sub text-muted small">(<span id="capRowsNum">15</span> rows × <span id="capColsNum">2</span> seats)</span>
+          </div>
+          <span class="text-muted small">Real-time Layout</span>
         </div>
-        <button class="btn btn-grad w-100">Save Hall Layout</button>
+
+        <!-- Live Desk Grid Preview (Point 24) -->
+        <div class="mini-grid-container mb-3" id="miniGridContainer">
+          <div class="small fw-semibold text-muted mb-2 text-center">
+            Classroom Desk Arrangement Preview
+          </div>
+          <div class="mini-grid-layout" id="miniGridLayout"></div>
+        </div>
+
+        <button class="btn btn-grad w-100 py-2.5">
+          <?= svg_icon('plus', 'me-1', 16) ?>Save Hall Layout
+        </button>
       </form>
     </div>
 
-    <!-- Batch Room Creator for 1000+ Rooms -->
+    <!-- Batch Room Creator (Points 25) -->
     <div class="table-card">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="d-flex align-items-center gap-2">
-          <div class="text-primary"><?= svg_icon('grid', '', 20) ?></div>
-          <h6 class="fw-bold mb-0">Batch Create Exam Halls</h6>
+      <div class="card-title-header">
+        <div class="card-title-icon">
+          <?= svg_icon('grid', '', 20) ?>
         </div>
-        <span class="badge bg-info-subtle text-info small">1 to 5,000 Halls</span>
+        <div class="card-title-text">
+          <h6>Batch Create Exam Halls</h6>
+          <p>Quickly provision multiple exam halls with uniform layouts.</p>
+        </div>
       </div>
-      <p class="text-muted small mb-3">Quickly provision hundreds or thousands of exam halls.</p>
-      <form method="post" action="rooms.php">
+
+      <form method="post" action="rooms.php" id="batchRoomForm" onsubmit="return confirmBatchSubmit(event);">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action" value="batch">
-        <div class="row g-2 mb-2">
+        <div class="row g-3 mb-2">
           <div class="col-6">
-            <label class="form-label small fw-semibold">No. of Rooms</label>
+            <label class="form-label" for="bCount">No. of Rooms</label>
             <input name="batch_rooms" id="bCount" type="number" min="1" max="5000" class="form-control" value="1000" required oninput="calcBatch()">
           </div>
           <div class="col-6">
-            <label class="form-label small fw-semibold">Start Room No</label>
-            <input name="batch_start_no" id="bStartNo" type="number" class="form-control" value="101" required>
+            <label class="form-label" for="bStartNo">Start Room No</label>
+            <input name="batch_start_no" id="bStartNo" type="number" class="form-control" value="101" required oninput="calcBatch()">
           </div>
         </div>
-        <div class="d-flex gap-1 flex-wrap mb-2">
-          <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setBatchPreset(1000, 15, 2)">1,000 Halls</button>
-          <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setBatchPreset(500, 15, 2)">500 Halls</button>
-          <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setBatchPreset(100, 15, 2)">100 Halls</button>
-          <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setBatchPreset(20, 15, 2)">20 Halls</button>
+
+        <!-- Styled Brand Pills for Presets (Point 25) -->
+        <div class="d-flex gap-1.5 flex-wrap my-2">
+          <button type="button" class="preset-pill" onclick="setBatchPreset(1000, 15, 2)">1,000 Halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(500, 15, 2)">500 Halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(100, 15, 2)">100 Halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(20, 15, 2)">20 Halls</button>
         </div>
-        <div class="mb-2">
-          <label class="form-label small fw-semibold">Block Name</label>
-          <input name="batch_block" class="form-control" value="Campus Exam Complex">
+
+        <div class="mb-3">
+          <label class="form-label" for="bBlock">Block Name</label>
+          <input name="batch_block" id="bBlock" class="form-control" value="Campus Exam Complex" oninput="calcBatch()">
         </div>
-        <div class="row g-2 mb-3">
+
+        <div class="row g-3 mb-3">
           <div class="col-6">
-            <label class="form-label small fw-semibold">Rows</label>
+            <label class="form-label" for="bRows">Rows / Room</label>
             <input name="batch_rows" id="bRows" type="number" min="1" max="100" class="form-control" value="15" required oninput="calcBatch()">
           </div>
           <div class="col-6">
-            <label class="form-label small fw-semibold">Columns</label>
+            <label class="form-label" for="bCols">Seats / Bench</label>
             <input name="batch_cols" id="bCols" type="number" min="1" max="20" class="form-control" value="2" required oninput="calcBatch()">
           </div>
         </div>
-        <div class="p-2 mb-3 bg-light rounded text-center small text-muted border" id="batchPreview">
-          Total: <strong>30,000 desks</strong> across 1,000 rooms (30 desks/room)
+
+        <!-- Confirmation Summary Box (Point 25) -->
+        <div class="p-2.5 mb-3 bg-light rounded-3 border small" id="batchSummaryBox">
+          Provision <strong>1,000 halls</strong> (101–1100) in <strong>Campus Exam Complex</strong> with 30 desks/room (Total: 30,000 desks).
         </div>
-        <button class="btn btn-outline-primary w-100 rounded-pill">
-          <?= svg_icon('grid', 'me-1', 15) ?>Batch Create Halls
+
+        <button class="btn btn-outline-primary w-100 py-2">
+          <?= svg_icon('grid', 'me-1.5', 16) ?>Create Batch Halls
         </button>
       </form>
     </div>
   </div>
 
-  <div class="col-lg-8">
+  <!-- Right Side: Rooms Table & Toolbar (Point 28, 29, 30) -->
+  <div class="col-lg-7">
     <div class="table-card">
-      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <form class="d-flex gap-2" method="get" style="max-width: 380px;">
-          <input name="q" value="<?= htmlspecialchars($q) ?>" class="form-control form-control-sm" placeholder="Search Hall No or Block…">
-          <button class="btn btn-sm btn-outline-primary">Search</button>
-          <?php if ($q !== ''): ?>
-            <a href="rooms.php" class="btn btn-sm btn-outline-secondary">Reset</a>
-          <?php endif; ?>
-        </form>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0">Configured Examination Halls</h6>
         <span class="text-muted small">
-          Showing <?= number_format($offset + 1) ?>–<?= number_format(min($filteredCount, $offset + $perPage)) ?> of <?= number_format($filteredCount) ?> halls
+          Page <?= $page ?> of <?= max(1, $totalPages) ?> (<?= number_format($filteredCount) ?> halls)
         </span>
       </div>
 
-      <div class="table-responsive" style="max-height:65vh;overflow:auto">
+      <!-- Toolbar Row (Point 28) -->
+      <form class="table-toolbar-row" method="get">
+        <div class="toolbar-search">
+          <input name="q" value="<?= htmlspecialchars($q) ?>" class="form-control" placeholder="Search Hall No or Block…">
+        </div>
+        <div class="toolbar-filters">
+          <select name="active" class="form-select" style="min-width: 140px;">
+            <option value="">All Statuses</option>
+            <option value="1" <?= $activeFilter === '1' ? 'selected' : '' ?>>Active Only</option>
+            <option value="0" <?= $activeFilter === '0' ? 'selected' : '' ?>>Inactive Only</option>
+          </select>
+          <button class="btn btn-grad py-1 px-3" style="height: 44px;">Filter</button>
+          <?php if ($q !== '' || $activeFilter !== ''): ?>
+            <a href="rooms.php" class="btn btn-outline-secondary py-1 px-3 d-inline-flex align-items-center" style="height: 44px;">Reset</a>
+          <?php endif; ?>
+        </div>
+        <div class="toolbar-count-badge ms-auto">
+          <?= number_format($filteredCount) ?> Hall(s)
+        </div>
+      </form>
+
+      <div class="table-responsive" style="max-height: 60vh; overflow: auto;">
         <table class="table align-middle mb-0">
-          <thead style="position:sticky;top:0;z-index:2;background:#f8fafc;">
+          <thead style="position: sticky; top: 0; z-index: 2; background: var(--table-th-bg, #DFD6C8);">
             <tr>
-              <th>Room</th>
+              <th>Hall</th>
               <th>Block</th>
-              <th>Grid Layout</th>
-              <th>Total Desks</th>
-              <th>Occupied</th>
+              <th>Dimensions</th>
+              <th>Capacity</th>
               <th>Status</th>
               <th class="text-end">Actions</th>
             </tr>
           </thead>
           <tbody>
-          <?php foreach ($rooms as $r):
-            $rows = (int)$r['rows_count'];
-            $cols = (int)$r['cols_count'];
-            $cap = (int)$r['capacity'] ?: ($rows * $cols);
-            $isActive = (bool)$r['active'];
-          ?>
+          <?php foreach ($rooms as $r): ?>
             <tr>
-              <td class="fw-bold text-main">Hall <?= htmlspecialchars($r['room_no']) ?></td>
-              <td><?= htmlspecialchars($r['block']) ?></td>
-              <td><span class="badge bg-light text-dark border px-2 py-1"><?= $rows ?> rows × <?= $cols ?> cols</span></td>
-              <td><span class="fw-bold text-primary"><?= number_format($cap) ?> desks</span></td>
-              <td><?= (int)$r['occupied'] ?> seated</td>
               <td>
-                <span class="status-pill <?= $isActive ? 'status-upcoming' : 'status-completed' ?>">
-                  <span class="status-dot"></span>
-                  <?= $isActive ? 'Active' : 'Inactive' ?>
-                </span>
+                <span class="fw-bold text-main">Hall <?= htmlspecialchars($r['room_no']) ?></span>
               </td>
-              <td class="col-actions text-end text-nowrap">
-                <div class="action-buttons-group">
-                  <form method="post" class="d-inline" action="rooms.php">
-                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                    <input type="hidden" name="action" value="toggle">
-                    <input type="hidden" name="id" value="<?= $r['id'] ?>">
-                    <button class="btn-action <?= $isActive ? 'btn-action-edit' : 'btn-action-generate' ?>" title="<?= $isActive ? 'Deactivate Hall' : 'Activate Hall' ?>">
-                      <?= svg_icon('eye', '', 15) ?>
-                    </button>
-                  </form>
-                  <button type="button" class="btn-action btn-action-delete"
-                          title="Delete Hall"
-                          data-bs-toggle="modal"
-                          data-bs-target="#deleteRoomModal"
-                          data-id="<?= $r['id'] ?>"
-                          data-occupied="<?= (int)$r['occupied'] ?>"
-                          data-name="Hall <?= htmlspecialchars($r['room_no'], ENT_QUOTES) ?>">
-                    <?= svg_icon('trash', '', 15) ?>
+              <td><?= htmlspecialchars($r['block']) ?></td>
+              <td class="small text-muted">
+                <?= (int)$r['rows_count'] ?> rows × <?= (int)$r['cols_count'] ?> seats
+              </td>
+              <td>
+                <span class="badge bg-light text-dark border">
+                  <?= (int)$r['capacity'] ?> desks
+                </span>
+                <?php if ($r['occupied'] > 0): ?>
+                  <span class="badge bg-warning-subtle text-warning-emphasis ms-1">
+                    <?= (int)$r['occupied'] ?> seated
+                  </span>
+                <?php endif; ?>
+              </td>
+              <td>
+                <form method="post" action="rooms.php" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                  <input type="hidden" name="action" value="toggle">
+                  <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                  <button type="submit" class="badge <?= $r['active'] ? 'badge-active-sage' : 'badge-inactive-muted' ?>" style="cursor: pointer;">
+                    <?= $r['active'] ? 'Active' : 'Inactive' ?>
                   </button>
-                </div>
+                </form>
+              </td>
+              <td class="text-end">
+                <button type="button" class="btn-action btn-action-delete"
+                        title="Delete Hall"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteRoomModal"
+                        data-id="<?= $r['id'] ?>"
+                        data-name="<?= htmlspecialchars($r['room_no'] . ' (' . $r['block'] . ')', ENT_QUOTES) ?>"
+                        data-occupied="<?= (int)$r['occupied'] ?>">
+                  <?= svg_icon('trash', '', 15) ?>
+                </button>
               </td>
             </tr>
           <?php endforeach; ?>
           <?php if (!$rooms): ?>
             <tr>
-              <td colspan="7" class="text-center text-muted py-5">
-                <div class="empty-state-icon mx-auto"><?= svg_icon('building', '', 26) ?></div>
-                <div class="fw-bold mt-2">No halls found</div>
-                <div class="small text-muted">Try adjusting your search query or add new halls.</div>
+              <td colspan="6" class="text-center text-muted py-5">
+                No examination halls found matching your criteria.
               </td>
             </tr>
           <?php endif; ?>
@@ -340,22 +396,26 @@ $rooms = $stmt->fetchAll();
         </table>
       </div>
 
-      <!-- Pagination -->
+      <!-- Pagination (Point 29) -->
       <?php if ($totalPages > 1): ?>
-        <nav class="mt-3 d-flex justify-content-between align-items-center">
-          <div class="small text-muted">Page <?= $page ?> of <?= $totalPages ?></div>
-          <ul class="pagination pagination-sm mb-0">
-            <?php if ($page > 1): ?>
-              <li class="page-item"><a class="page-link" href="?page=1<?= $q ? '&q=' . urlencode($q) : '' ?>">« First</a></li>
-              <li class="page-item"><a class="page-link" href="?page=<?= $page - 1 ?><?= $q ? '&q=' . urlencode($q) : '' ?>">‹ Prev</a></li>
-            <?php endif; ?>
-            <li class="page-item active"><span class="page-link"><?= $page ?></span></li>
-            <?php if ($page < $totalPages): ?>
-              <li class="page-item"><a class="page-link" href="?page=<?= $page + 1 ?><?= $q ? '&q=' . urlencode($q) : '' ?>">Next ›</a></li>
-              <li class="page-item"><a class="page-link" href="?page=<?= $totalPages ?><?= $q ? '&q=' . urlencode($q) : '' ?>">Last »</a></li>
-            <?php endif; ?>
-          </ul>
-        </nav>
+        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+          <span class="small text-muted">
+            Showing <?= number_format($offset + 1) ?>–<?= number_format(min($filteredCount, $offset + $perPage)) ?> of <?= number_format($filteredCount) ?>
+          </span>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= $page - 1 ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Prev</a>
+              </li>
+              <li class="page-item active">
+                <span class="page-link"><?= $page ?> / <?= $totalPages ?></span>
+              </li>
+              <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= $page + 1 ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Next</a>
+              </li>
+            </ul>
+          </nav>
+        </div>
       <?php endif; ?>
     </div>
   </div>
@@ -406,6 +466,9 @@ $rooms = $stmt->fetchAll();
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  calcCap();
+  calcBatch();
+
   const deleteModal = document.getElementById('deleteRoomModal');
   if (deleteModal) {
     deleteModal.addEventListener('show.bs.modal', (event) => {
@@ -431,22 +494,64 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function calcCap() {
-  const r = +document.getElementById('rowsIn').value || 0;
-  const c = +document.getElementById('colsIn').value || 0;
-  document.getElementById('capPreview').innerHTML = `Total: <b>${(r * c).toLocaleString()} desks</b> (${r} rows × ${c} columns)`;
+function renderMiniDeskGrid(rows, cols) {
+  const container = document.getElementById('miniGridLayout');
+  if (!container) return;
+  const maxR = Math.min(rows, 8);
+  const maxC = Math.min(cols, 6);
+  let html = '';
+  for (let r = 0; r < maxR; r++) {
+    html += '<div class="mini-grid-row">';
+    for (let c = 0; c < maxC; c++) {
+      html += '<div class="mini-desk-cell" title="Row ' + (r+1) + ', Seat ' + (c+1) + '"></div>';
+    }
+    html += '</div>';
+  }
+  if (rows > 8 || cols > 6) {
+    html += '<div class="text-muted" style="font-size:10px; text-align:center; margin-top:4px;">+ ' + (rows - maxR) + ' more rows</div>';
+  }
+  container.innerHTML = html;
 }
+
+function calcCap() {
+  const r = Math.max(1, +document.getElementById('rowsIn').value || 1);
+  const c = Math.max(1, +document.getElementById('colsIn').value || 1);
+  const total = r * c;
+  document.getElementById('capTotalNum').textContent = total.toLocaleString();
+  document.getElementById('capRowsNum').textContent = r;
+  document.getElementById('capColsNum').textContent = c;
+  renderMiniDeskGrid(r, c);
+}
+
 function calcBatch() {
   const n = +document.getElementById('bCount').value || 0;
+  const s = +document.getElementById('bStartNo').value || 101;
   const r = +document.getElementById('bRows').value || 0;
   const c = +document.getElementById('bCols').value || 0;
-  document.getElementById('batchPreview').innerHTML = `Total: <b>${(n * r * c).toLocaleString()} desks</b> across ${n.toLocaleString()} rooms (${r * c} desks/room)`;
+  const blk = document.getElementById('bBlock').value || 'Campus Exam Complex';
+  const endNo = s + Math.max(0, n - 1);
+  const desksPerRoom = r * c;
+  const totalDesks = n * desksPerRoom;
+
+  const summary = document.getElementById('batchSummaryBox');
+  if (summary) {
+    summary.innerHTML = `Provision <strong>${n.toLocaleString()} halls</strong> (${s}–${endNo}) in <strong>${blk}</strong> with ${desksPerRoom} desks/room (Total: <strong>${totalDesks.toLocaleString()}</strong> desks).`;
+  }
 }
+
 function setBatchPreset(n, r, c) {
   document.getElementById('bCount').value = n;
   document.getElementById('bRows').value = r;
   document.getElementById('bCols').value = c;
   calcBatch();
+}
+
+function confirmBatchSubmit(e) {
+  const n = +document.getElementById('bCount').value || 0;
+  if (n >= 500) {
+    return confirm(`Are you sure you want to provision ${n.toLocaleString()} exam halls in bulk?`);
+  }
+  return true;
 }
 </script>
 

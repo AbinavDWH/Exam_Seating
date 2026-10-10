@@ -8,7 +8,7 @@ if (!empty($_SESSION['admin_id'])) {
 }
 
 $error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verify_csrf();
     if (!check_login_rate_limit('admin_login')) {
         $error = 'Too many failed login attempts. Please wait 15 minutes before retrying.';
@@ -26,6 +26,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_id'] = $admin['id'];
             $_SESSION['admin_user'] = $admin['username'];
 
+            if (!empty($_POST['remember'])) {
+                // Extend session cookie lifetime to 30 days if remember is checked
+                $params = session_get_cookie_params();
+                setcookie(
+                    session_name(),
+                    session_id(),
+                    time() + (30 * 86400),
+                    $params['path'],
+                    $params['domain'],
+                    $params['secure'],
+                    $params['httponly']
+                );
+            }
+
             if (!empty($admin['must_change_password']) || password_verify('Admin@123', $admin['password_hash'])) {
                 $_SESSION['must_change_password'] = true;
                 header('Location: change_password.php');
@@ -37,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         record_failed_login('admin_login');
-        $error = 'Invalid username or password.';
+        $error = 'Wrong username or password. Please try again.';
     }
 }
 ?>
@@ -47,60 +61,455 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign In · ExamSeat Administration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <link href="assets/admin.css" rel="stylesheet">
 <style>
   body {
     min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: radial-gradient(120% 120% at 50% 10%, #1e1b4b 0%, #090d16 100%);
-    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Soft sage radial glow over deep olive charcoal #23261F */
+    background:
+      radial-gradient(circle at 50% 32%, rgba(139, 154, 110, 0.22) 0%, transparent 48%),
+      radial-gradient(circle at 20% 80%, rgba(94, 122, 153, 0.12) 0%, transparent 42%),
+      #23261F;
+    background-color: #23261F;
+    margin: 0;
+    padding: 24px 16px;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #2B2E27;
   }
+
+  .login-wrapper {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  /* Crisp white card on deep background */
   .login-card {
     width: 100%;
-    max-width: 440px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
     background: #ffffff;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    padding: 36px 32px;
+    border-radius: 20px;
+    border: 1px solid #EAE2D6;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    padding: 36px 32px 32px;
+  }
+
+  /* Centered brand logo tile in primary brand sage #8B9A6E */
+  .brand-logo-tile {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 18px;
+    border-radius: 14px;
+    background: #8B9A6E;
+    display: grid;
+    place-items: center;
+    color: #F7F2EB;
+    box-shadow: none;
+  }
+
+  /* Title and lighter subtitle */
+  .login-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: #2B2E27;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .login-subtitle {
+    font-size: 0.88rem;
+    color: #6B6F62;
+    font-weight: 500;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  /* Muted brick red error box inside card */
+  .login-error-alert {
+    background: #F9ECE8;
+    border: 1px solid #F0CFC7;
+    color: #7D3020;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Form groups with labels cleanly above inputs */
+  .form-group-custom {
+    margin-bottom: 18px;
+  }
+
+  .form-label-custom {
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #2B2E27;
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+  }
+
+  /* Full-width inputs with pure white background */
+  .form-control-custom {
+    width: 100%;
+    height: 48px;
+    border: 1.5px solid #EAE2D6;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #2B2E27;
+    background-color: #ffffff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .form-control-custom:focus {
+    border-color: #8B9A6E;
+    box-shadow: 0 0 0 3px rgba(139, 154, 110, 0.28);
+    outline: none;
+  }
+
+  /* Slightly darkened placeholder for high contrast */
+  .form-control-custom::placeholder {
+    color: #8A8E81;
+    font-weight: 400;
+    opacity: 1;
+  }
+
+  /* Password input with show/hide toggle */
+  .password-input-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .password-input-wrap .form-control-custom {
+    padding-right: 46px;
+  }
+
+  .password-toggle-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 44px;
+    background: transparent;
+    border: none;
+    display: grid;
+    place-items: center;
+    color: #8A8E81;
+    cursor: pointer;
+    font-size: 1.15rem;
+    padding: 0;
+    border-radius: 0 12px 12px 0;
+    transition: color 0.15s ease;
+  }
+
+  .password-toggle-btn:hover {
+    color: #8B9A6E;
+  }
+
+  .password-toggle-btn:focus-visible {
+    outline: 2px solid #8B9A6E;
+    outline-offset: -2px;
+  }
+
+  /* Caps Lock Warning (Mustard) */
+  .caps-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8C6514;
+    background: #FAF3E1;
+    border: 1px solid #F3E4BA;
+    border-radius: 8px;
+    padding: 5px 10px;
+    margin-top: 6px;
+  }
+
+  /* Remember this device checkbox */
+  .form-check-custom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 22px;
+    margin-top: 4px;
+  }
+
+  .form-check-custom input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #6D7C55;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+  .form-check-custom label {
+    font-size: 0.84rem;
+    color: #4D5247;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Full-width submit button in #FFBDA3 */
+  .btn-submit-login {
+    width: 100%;
+    height: 48px;
+    background: #FFBDA3;
+    color: #261B14;
+    border: 1px solid #F3A88D;
+    border-radius: 12px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(234, 120, 80, 0.25);
+    transition: all 0.18s ease;
+  }
+
+  .btn-submit-login:hover {
+    background: #F7A384;
+    border-color: #EE9572;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(234, 120, 80, 0.35);
+  }
+
+  .btn-submit-login:active {
+    background: #EE8F6A;
+    transform: translateY(0);
+  }
+
+  .btn-submit-login:focus-visible {
+    outline: 2px solid #FFBDA3;
+    outline-offset: 2px;
+  }
+
+  .btn-submit-login:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Demo viva hint */
+  .demo-login-hint {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6B6F62;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed #EAE2D6;
+  }
+
+  .demo-login-hint code {
+    background: #FAF6F0;
+    color: #2B2E27;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+
+  /* Open Student Seat Finder Link below the card */
+  .login-footer {
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  .student-portal-link {
+    color: #D8D3CA;
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+
+  .student-portal-link:hover {
+    color: #C2D1A8;
+    text-decoration: none;
+    transform: translateX(-3px);
+  }
+
+  .student-portal-link:focus-visible {
+    outline: 2px solid #8B9A6E;
+    outline-offset: 4px;
+    border-radius: 4px;
   }
 </style>
 </head>
 <body>
-<div class="login-card">
-  <div class="text-center mb-4">
-    <div style="width: 54px; height: 54px; margin: 0 auto 16px; border-radius: 16px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); display: grid; place-items: center; color: #fff; box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);">
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+<div class="login-wrapper">
+  <div class="login-card">
+    <!-- Centered Brand Logo & Headings -->
+    <div class="brand-logo-tile" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect x="4" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="10" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="16" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="4" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="10" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="16" y="10" width="4" height="4" rx="1" fill="currentColor"/>
+        <rect x="4" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="10" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+        <rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
+      </svg>
     </div>
-    <h4 class="fw-bold mb-1" style="letter-spacing: -0.02em;">ExamSeat Administration</h4>
-    <p class="text-muted small mb-0">University Examination &amp; Seating Portal</p>
+    <h1 class="login-title">ExamSeat Administration</h1>
+    <p class="login-subtitle">University Examination &amp; Seating Portal</p>
+
+    <!-- Error Alert Box -->
+    <?php if ($error): ?>
+      <div class="login-error-alert" role="alert">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <span><?= htmlspecialchars($error) ?></span>
+      </div>
+    <?php endif; ?>
+
+    <!-- Login Form -->
+    <form method="post" action="login.php" id="login-form">
+      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+
+      <div class="form-group-custom">
+        <label for="username" class="form-label-custom">Username</label>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          class="form-control-custom"
+          required
+          autofocus
+          placeholder="Enter admin username"
+          autocomplete="username"
+        >
+      </div>
+
+      <div class="form-group-custom">
+        <label for="password" class="form-label-custom">Password</label>
+        <div class="password-input-wrap">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            class="form-control-custom"
+            required
+            placeholder="Enter password"
+            autocomplete="current-password"
+          >
+          <button
+            type="button"
+            class="password-toggle-btn"
+            id="toggle-password-btn"
+            aria-label="Toggle password visibility"
+            tabindex="-1"
+          >
+            <i class="bi bi-eye" id="toggle-password-icon"></i>
+          </button>
+        </div>
+        <!-- Caps Lock Indicator -->
+        <div id="caps-warning" class="caps-warning d-none" role="status" aria-live="polite">
+          <i class="bi bi-capslock-fill" aria-hidden="true"></i> Caps Lock is ON
+        </div>
+      </div>
+
+      <!-- Remember this device -->
+      <div class="form-check-custom">
+        <input type="checkbox" id="remember" name="remember">
+        <label for="remember">Remember this device</label>
+      </div>
+
+      <!-- Full-Width Submit Button -->
+      <button type="submit" class="btn-submit-login" id="submit-btn">
+        <span id="btn-text">Sign In to Dashboard →</span>
+      </button>
+
+      <!-- Demo viva credentials hint -->
+      <div class="demo-login-hint">
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i> Demo login: <code>admin</code> / <code>Admin@123</code>
+      </div>
+    </form>
   </div>
 
-  <?php if ($error): ?>
-    <div class="alert alert-danger py-2 small rounded-3"><?= htmlspecialchars($error) ?></div>
-  <?php endif; ?>
-
-  <form method="post" action="login.php">
-    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-    <div class="mb-3">
-      <label class="form-label small fw-semibold text-secondary">Username</label>
-      <input name="username" class="form-control" required autofocus placeholder="Enter admin username" autocomplete="username">
-    </div>
-    <div class="mb-4">
-      <label class="form-label small fw-semibold text-secondary">Password</label>
-      <input name="password" type="password" class="form-control" required placeholder="Enter password" autocomplete="current-password">
-    </div>
-    <button class="btn btn-grad w-100 py-2 mb-3">Sign In to Dashboard →</button>
-  </form>
-
-  <div class="text-center pt-2 border-top">
-    <a href="../" class="text-decoration-none small text-muted fw-semibold">
-      <i class="bi bi-arrow-left me-1"></i>Open Student Seat Finder
+  <!-- Open Student Seat Finder Link Below Card -->
+  <div class="login-footer">
+    <a href="../" class="student-portal-link" aria-label="Return to Student Seat Finder">
+      <i class="bi bi-arrow-left" aria-hidden="true"></i> Open Student Seat Finder
     </a>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const pwdInput = document.getElementById('password');
+  const toggleBtn = document.getElementById('toggle-password-btn');
+  const toggleIcon = document.getElementById('toggle-password-icon');
+  const capsWarning = document.getElementById('caps-warning');
+  const loginForm = document.getElementById('login-form');
+  const submitBtn = document.getElementById('submit-btn');
+
+  // 1. Show/hide password toggle
+  if (toggleBtn && pwdInput) {
+    toggleBtn.addEventListener('click', () => {
+      const isPassword = pwdInput.type === 'password';
+      pwdInput.type = isPassword ? 'text' : 'password';
+      toggleIcon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
+      toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+      pwdInput.focus();
+    });
+  }
+
+  // 2. Caps Lock warning
+  if (pwdInput && capsWarning) {
+    ['keydown', 'keyup'].forEach((evt) => {
+      pwdInput.addEventListener(evt, (e) => {
+        if (e.getModifierState && e.getModifierState('CapsLock')) {
+          capsWarning.classList.remove('d-none');
+        } else {
+          capsWarning.classList.add('d-none');
+        }
+      });
+    });
+    pwdInput.addEventListener('blur', () => {
+      capsWarning.classList.add('d-none');
+    });
+  }
+
+  // 3. Spinner and disable button on submit
+  if (loginForm && submitBtn) {
+    loginForm.addEventListener('submit', () => {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+        Signing in…
+      `;
+    });
+  }
+});
+</script>
 </body>
 </html>

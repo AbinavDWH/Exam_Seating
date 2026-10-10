@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS students (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     roll_no   VARCHAR(20) UNIQUE NOT NULL,
     name      VARCHAR(100) NOT NULL,
-    dob       DATE         DEFAULT '2005-01-01',
+    dob       DATE         DEFAULT NULL,
     branch    VARCHAR(20)  NOT NULL,
     dept      VARCHAR(20),
     semester  INTEGER      NOT NULL DEFAULT 1,

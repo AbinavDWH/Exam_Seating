@@ -57,10 +57,10 @@ if (!$rows) {
 $pdo = db();
 $stmt = $pdo->prepare("
     INSERT INTO students (roll_no, name, dob, branch, dept, semester, year, exam_code, exam_id)
-    VALUES (?, ?, COALESCE(?, '2005-01-01'), ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(roll_no) DO UPDATE SET
         name = excluded.name,
-        dob = COALESCE(excluded.dob, students.dob),
+        dob = excluded.dob,
         branch = excluded.branch,
         dept = excluded.dept,
         semester = excluded.semester,
@@ -94,7 +94,15 @@ try {
             continue;
         }
         $yr = (int)ceil($sem / 2);
-        $dob = !empty($r['dob']) ? trim((string)$r['dob']) : null;
+
+        // Reject CSV rows without a valid Date of Birth
+        $dobRaw = !empty($r['dob']) ? trim((string)$r['dob']) : '';
+        if ($dobRaw === '' || strtotime($dobRaw) === false) {
+            $skipped++;
+            continue;
+        }
+        $dob = date('Y-m-d', (int)strtotime($dobRaw));
+
         $examCode = !empty($r['exam_code']) ? trim((string)$r['exam_code']) : null;
         $examId = !empty($r['exam_id']) ? (int)$r['exam_id'] : null;
 

@@ -53,8 +53,8 @@ $cards = [
     [
         'id'    => 'students',
         'icon'  => 'users',
-        'bg'    => '#eef2ff',
-        'color' => '#4f46e5',
+        'bg'    => '#EEF2E6',
+        'color' => '#43522C',
         'label' => 'Registered Students',
         'value' => $stats['students'],
         'link'  => 'students.php',
@@ -62,8 +62,8 @@ $cards = [
     [
         'id'    => 'rooms',
         'icon'  => 'building',
-        'bg'    => '#ecfdf5',
-        'color' => '#10b981',
+        'bg'    => '#FAF3E1',
+        'color' => '#6B4E0E',
         'label' => 'Active Exam Halls',
         'value' => $stats['rooms'],
         'link'  => 'rooms.php',
@@ -71,8 +71,8 @@ $cards = [
     [
         'id'    => 'capacity',
         'icon'  => 'grid',
-        'bg'    => '#fff7ed',
-        'color' => '#f59e0b',
+        'bg'    => '#EDF3F8',
+        'color' => '#27384B',
         'label' => 'Total Seating Capacity',
         'value' => $stats['capacity'],
         'link'  => 'rooms.php',
@@ -80,8 +80,8 @@ $cards = [
     [
         'id'    => 'seats',
         'icon'  => 'check-circle',
-        'bg'    => '#fdf2f8',
-        'color' => '#ec4899',
+        'bg'    => '#FBF2E3',
+        'color' => '#70381D',
         'label' => 'Seats Allocated',
         'value' => $stats['seats'],
         'link'  => 'generate.php',
@@ -197,19 +197,43 @@ $cards = [
         </tr>
       </thead>
       <tbody id="examsTableBody">
-        <?php foreach ($exams as $e):
-          $assigned = (int)$e['assigned'];
-          $totalStudents = (int)$e['students_count'];
-          $pct = $totalStudents > 0 ? (int)round(($assigned / $totalStudents) * 100) : 0;
-          $status = strtolower($e['status']);
-          $statusClass = ($status === 'ongoing') ? 'status-ongoing' : (($status === 'completed' || $status === 'done') ? 'status-completed' : 'status-upcoming');
-          $statusLabel = ($status === 'completed') ? 'Done' : ucfirst($status);
-          $fillColor = ($pct >= 100) ? '#10b981' : (($pct > 0) ? '#4f46e5' : '#cbd5e1');
+        <?php 
+          $today = date('Y-m-d');
+          foreach ($exams as $e):
+            $assigned = (int)$e['assigned'];
+            $totalStudents = (int)$e['students_count'];
+            $pct = $totalStudents > 0 ? (int)round(($assigned / $totalStudents) * 100) : 0;
+            
+            // Auto-compute status from today's date (Item 4)
+            $examDateStr = $e['exam_date'];
+            if ($examDateStr < $today) {
+                $statusClass = 'status-completed'; // grey
+                $statusLabel = 'Completed';
+                $autoStatus = 'completed';
+            } elseif ($examDateStr === $today) {
+                $statusClass = 'status-ongoing';   // blue
+                $statusLabel = 'Ongoing';
+                $autoStatus = 'ongoing';
+            } else {
+                $statusClass = 'status-upcoming';  // soft amber
+                $statusLabel = 'Upcoming';
+                $autoStatus = 'upcoming';
+            }
+
+            // Progress bar color by value (sage fill; dark sage at 100%)
+            if ($pct >= 100) {
+                $fillColor = '#43522C'; // dark sage at 100%
+            } elseif ($pct > 0) {
+                $fillColor = '#8B9A6E'; // brand sage
+            } else {
+                $fillColor = '#D8D3CA'; // beige/neutral
+            }
+            $progressTooltip = number_format($assigned) . ' of ' . number_format($totalStudents) . ' students seated (' . $pct . '%)';
         ?>
           <tr data-exam-id="<?= $e['id'] ?>"
               data-name="<?= htmlspecialchars(strtolower($e['exam_name'])) ?>"
               data-sem="Sem <?= (int)$e['semester'] ?>"
-              data-status="<?= $status ?>"
+              data-status="<?= $autoStatus ?>"
               data-date="<?= $e['exam_date'] ?> <?= $e['start_time'] ?>"
               data-pct="<?= $pct ?>">
             
@@ -231,7 +255,7 @@ $cards = [
               </span>
             </td>
 
-            <!-- Column 4: Status (Center aligned) - Requirement 5 -->
+            <!-- Column 4: Status (Center aligned) -->
             <td class="col-status">
               <span class="status-pill <?= $statusClass ?>">
                 <span class="status-dot"></span>
@@ -239,9 +263,9 @@ $cards = [
               </span>
             </td>
 
-            <!-- Column 5: Allocated Progress Bar (Left aligned) - Requirement 6 -->
+            <!-- Column 5: Allocated Progress Bar (Left aligned) with tooltip -->
             <td class="col-allocated">
-              <div class="seated-progress-wrapper">
+              <div class="seated-progress-wrapper" data-bs-toggle="tooltip" title="<?= htmlspecialchars($progressTooltip) ?>">
                 <div class="seated-progress-info">
                   <span class="seated-progress-count"><?= number_format($assigned) ?> / <?= number_format($totalStudents) ?> Seated</span>
                   <span class="seated-progress-pct"><?= $pct ?>%</span>
@@ -252,38 +276,34 @@ $cards = [
               </div>
             </td>
 
-            <!-- Column 6: Actions (Right aligned) - Requirement 7 -->
+            <!-- Column 6: Actions (Right aligned) -->
             <td class="col-actions text-end text-nowrap">
               <div class="action-buttons-group">
-                <!-- View Seating Plan -->
-                <a href="print_plan.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-view" title="View Seating Plan">
-                  <?= svg_icon('eye', '', 15) ?>
+                <!-- Swap Seats -->
+                <a href="swap.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-swap" data-bs-toggle="tooltip" title="Swap seats">
+                  <?= svg_icon('sort', '', 15) ?>
                 </a>
 
-                <!-- Edit Exam Session -->
-                <button type="button" class="btn-action btn-action-edit btn-edit-exam"
-                        title="Edit Exam"
-                        data-bs-toggle="modal"
-                        data-bs-target="#editExamModal"
-                        data-id="<?= $e['id'] ?>"
-                        data-name="<?= htmlspecialchars($e['exam_name'], ENT_QUOTES) ?>"
-                        data-date="<?= $e['exam_date'] ?>"
-                        data-time="<?= substr($e['start_time'], 0, 5) ?>"
-                        data-sem="<?= (int)$e['semester'] ?>"
-                        data-status="<?= $e['status'] ?>">
-                  <?= svg_icon('edit', '', 15) ?>
-                </button>
+                <!-- View / Print Seating Plan -->
+                <a href="print_plan.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-view" data-bs-toggle="tooltip" title="Print sheets">
+                  <?= svg_icon('printer', '', 15) ?>
+                </a>
 
                 <!-- Generate Seating -->
-                <a href="generate.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-generate" title="Generate Seating">
+                <a href="generate.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-generate" data-bs-toggle="tooltip" title="Generate seating">
                   <?= svg_icon('magic', '', 15) ?>
+                </a>
+
+                <!-- Export CSV -->
+                <a href="../api/export.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-edit" data-bs-toggle="tooltip" title="Export CSV">
+                  <?= svg_icon('download', '', 15) ?>
                 </a>
 
                 <!-- Delete Exam -->
                 <button type="button" class="btn-action btn-action-delete btn-delete-exam"
-                        title="Delete Exam"
                         data-bs-toggle="modal"
                         data-bs-target="#deleteExamModal"
+                        title="Delete"
                         data-id="<?= $e['id'] ?>"
                         data-name="<?= htmlspecialchars($e['exam_name'], ENT_QUOTES) ?>">
                   <?= svg_icon('trash', '', 15) ?>
@@ -533,6 +553,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('editExamSem').value = btn.getAttribute('data-sem');
     document.getElementById('editExamStatus').value = btn.getAttribute('data-status');
   });
+
+  // Initialize Tooltips (Item 27)
+  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
 });
 </script>
 

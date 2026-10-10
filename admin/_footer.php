@@ -72,7 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (toastParam === 'generated') {
       window.showToast('Seating allocation generated successfully.', 'success');
     } else {
-      window.showToast(decodeURIComponent(toastParam), 'info');
+      const decoded = decodeURIComponent(toastParam);
+      const isSuccess = /saved|success|added|updated|created/i.test(decoded);
+      const isDanger = /delete|error|fail|invalid/i.test(decoded);
+      window.showToast(decoded, isDanger ? 'danger' : (isSuccess ? 'success' : 'info'));
     }
     // Clean URL without reloading
     const cleanUrl = window.location.pathname + (window.location.search.replace(/[?&]toast=[^&]+/, '').replace(/^&/, '?'));

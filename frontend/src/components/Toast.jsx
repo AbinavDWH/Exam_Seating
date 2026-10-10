@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 
 const ToastCtx = createContext(() => {});
 export const useToast = () => useContext(ToastCtx);
@@ -16,7 +17,12 @@ export function ToastProvider({ children }) {
     <ToastCtx.Provider value={push}>
       {children}
       <div className="toasts no-print" aria-live="polite">
-        {toasts.map((t) => <div key={t.id} className="toast">{t.message}</div>)}
+        {toasts.map((t) => (
+          <div key={t.id} className="toast">
+            <CheckCircle2 size={16} color="#ffffff" />
+            <span>{t.message}</span>
+          </div>
+        ))}
       </div>
     </ToastCtx.Provider>
   );

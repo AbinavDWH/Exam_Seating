@@ -103,16 +103,27 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
     font-weight: 700;
     margin: 0;
   }
-  .front-stage {
+  .print-screen-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 16px auto 20px;
+    max-width: 440px;
     text-align: center;
-    border: 2px dashed #000;
-    padding: 6px;
-    font-weight: 800;
-    font-size: 11px;
-    letter-spacing: 3px;
-    margin-bottom: 16px;
-    background: #f8fafc;
+  }
+  .print-screen-bar {
+    width: 100%;
+    height: 6px;
+    background: #0f172a;
+    border-radius: 3px;
+  }
+  .print-screen-caption {
+    font-size: 10px;
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: 2px;
     text-transform: uppercase;
+    margin-top: 6px;
   }
   table.seating-grid {
     border-collapse: collapse;
@@ -120,45 +131,72 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
     margin: 0 auto 20px;
   }
   table.seating-grid th, table.seating-grid td {
-    border: 1px solid #777;
+    border: 1px solid #ccc;
     padding: 6px 4px;
     text-align: center;
+    vertical-align: middle;
     font-size: 11px;
   }
   table.seating-grid th {
-    background: #f1f5f9;
+    background: #f8fafc;
     font-weight: 700;
+    color: #334155;
   }
-  table.seating-grid td.occupied {
+  .print-bench-unit {
+    border: 1.5px solid #000;
+    border-radius: 5px;
+    padding: 3px;
+    display: flex;
+    gap: 4px;
+    background: #fff;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .print-seat-cell {
+    flex: 1;
+    min-width: 58px;
+    padding: 4px 2px;
+    text-align: center;
+    border: 1px dashed #999;
+    border-radius: 3px;
     background: #fff;
   }
-  table.seating-grid td.occupied b {
+  .print-seat-cell.occupied {
+    border: 1px solid #111;
+  }
+  .print-seat-cell.empty {
+    border: 1px dashed #ccc;
+    color: #aaa;
+  }
+  .print-seat-cell b {
     display: block;
-    font-size: 11.5px;
+    font-size: 11px;
     font-family: monospace;
     font-weight: 700;
+    color: #000;
   }
-  table.seating-grid td.occupied .code-badge {
-    display: inline-block;
-    background: #e0f2fe;
-    color: #0369a1;
-    font-weight: 700;
-    font-size: 9.5px;
-    padding: 1px 4px;
-    border-radius: 3px;
-    margin-top: 2px;
-    border: 1px solid #bae6fd;
-  }
-  table.seating-grid td.occupied .meta-dept {
-    font-size: 9px;
-    color: #444;
+  .print-code {
     display: block;
+    font-size: 9px;
+    font-weight: 600;
+    color: #333;
     margin-top: 1px;
   }
-  table.seating-grid td.empty {
-    background: #f8fafc;
-    color: #bbb;
-    font-style: italic;
+  .empty-text {
+    font-size: 10px;
+    color: #999;
+  }
+  .aisle-th, .aisle-td {
+    width: 24px;
+    background: #fafafa;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: 1px dashed #cbd5e1 !important;
+    border-right: 1px dashed #cbd5e1 !important;
+    font-size: 9px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
   .sign-row {
     display: flex;
@@ -181,7 +219,7 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
   <div class="d-flex justify-content-between align-items-center mb-2">
     <div>
       <b>Official Seating Chart</b> — <?= number_format($totalRoomsCount) ?> Hall(s) Allocated
-      <span class="badge bg-success-subtle text-success border ms-2">Zero Adjacent Same-Code Conflict</span>
+      <span class="badge bg-light text-dark border ms-2">Zero Adjacent Same-Code Conflict</span>
     </div>
     <div>
       <button class="btn btn-primary btn-sm me-2 d-inline-flex align-items-center gap-1.5" onclick="window.print()">
@@ -218,12 +256,17 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
   $distinctCodes = array_unique(array_filter(array_column($seats, 'exam_code')));
 ?>
 <div class="room-sheet">
-  <div class="exam-header">
-    <h1>OFFICE OF THE CONTROLLER OF EXAMINATIONS</h1>
-    <div class="sub">
-      <?= htmlspecialchars($exam['exam_name']) ?> &nbsp;|&nbsp;
-      Date: <?= date('d-m-Y', strtotime($exam['exam_date'])) ?> &nbsp;|&nbsp;
-      Time: <?= date('h:i A', strtotime($exam['start_time'])) ?>
+  <div class="exam-header d-flex align-items-center justify-content-center gap-3">
+    <div style="width:36px;height:36px;background:#ea580c;border-radius:8px;display:grid;place-items:center;color:#fff;flex-shrink:0;">
+      <?= svg_icon('seat-grid', '', 20) ?>
+    </div>
+    <div>
+      <h1 class="mb-0">OFFICE OF THE CONTROLLER OF EXAMINATIONS</h1>
+      <div class="sub">
+        <?= htmlspecialchars($exam['exam_name']) ?> &nbsp;|&nbsp;
+        Date: <?= date('d-m-Y', strtotime($exam['exam_date'])) ?> &nbsp;|&nbsp;
+        Time: <?= date('h:i A', strtotime($exam['start_time'])) ?>
+      </div>
     </div>
   </div>
 
@@ -240,14 +283,24 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
     </div>
   </div>
 
-  <div class="front-stage">▲ FRONT / INVIGILATOR TABLE ▲</div>
+  <div class="print-screen-wrap">
+    <div class="print-screen-bar"></div>
+    <div class="print-screen-caption">FRONT · INVIGILATOR DESK</div>
+  </div>
 
+  <?php
+    $benchCount = (int)ceil($maxCol / 2);
+    $leftBenchCount = max(1, (int)ceil($benchCount / 2));
+  ?>
   <table class="seating-grid">
     <thead>
       <tr>
-        <th style="width: 60px;">Row</th>
-        <?php for ($c = 1; $c <= $maxCol; $c++): ?>
-          <th>Col <?= $c ?></th>
+        <th style="width: 50px;">Row</th>
+        <?php for ($b = 1; $b <= $benchCount; $b++): ?>
+          <th>Bench <?= $b ?> <span style="font-size: 9px; font-weight: normal; color: #64748b;">(Cols <?= (2*$b-1) ?><?= (2*$b <= $maxCol ? ', ' . (2*$b) : '') ?>)</span></th>
+          <?php if ($b === $leftBenchCount && $benchCount > 1): ?>
+            <th class="aisle-th">Aisle</th>
+          <?php endif; ?>
         <?php endfor; ?>
       </tr>
     </thead>
@@ -255,17 +308,36 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
       <?php for ($r = 1; $r <= $maxRow; $r++): ?>
         <tr>
           <th>Row <?= $r ?></th>
-          <?php for ($c = 1; $c <= $maxCol; $c++):
-            $s = $grid[$r][$c] ?? null;
+          <?php for ($b = 1; $b <= $benchCount; $b++):
+            $cLeft = 2 * $b - 1;
+            $cRight = 2 * $b;
+            $sLeft = $grid[$r][$cLeft] ?? null;
+            $sRight = ($cRight <= $maxCol) ? ($grid[$r][$cRight] ?? null) : false;
           ?>
-            <?php if ($s): ?>
-              <td class="occupied">
-                <b><?= htmlspecialchars($s['roll_no']) ?></b>
-                <span class="code-badge"><?= htmlspecialchars($s['exam_code'] ?: $s['branch']) ?></span>
-                <span class="meta-dept"><?= htmlspecialchars($s['branch']) ?><?= !empty($s['semester']) ? '-S' . $s['semester'] : '' ?></span>
-              </td>
-            <?php else: ?>
-              <td class="empty">— Empty —</td>
+            <td>
+              <div class="print-bench-unit">
+                <div class="print-seat-cell <?= $sLeft ? 'occupied' : 'empty' ?>">
+                  <?php if ($sLeft): ?>
+                    <b><?= htmlspecialchars($sLeft['roll_no']) ?></b>
+                    <span class="print-code"><?= htmlspecialchars($sLeft['exam_code'] ?: $sLeft['branch']) ?></span>
+                  <?php else: ?>
+                    <span class="empty-text">—</span>
+                  <?php endif; ?>
+                </div>
+                <?php if ($sRight !== false): ?>
+                  <div class="print-seat-cell <?= $sRight ? 'occupied' : 'empty' ?>">
+                    <?php if ($sRight): ?>
+                      <b><?= htmlspecialchars($sRight['roll_no']) ?></b>
+                      <span class="print-code"><?= htmlspecialchars($sRight['exam_code'] ?: $sRight['branch']) ?></span>
+                    <?php else: ?>
+                      <span class="empty-text">—</span>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </td>
+            <?php if ($b === $leftBenchCount && $benchCount > 1): ?>
+              <td class="aisle-td"></td>
             <?php endif; ?>
           <?php endfor; ?>
         </tr>
