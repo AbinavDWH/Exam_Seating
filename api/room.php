@@ -51,39 +51,7 @@ $isAdmin = is_admin();
 $verifiedRoll = '';
 
 if ($searchRoll !== '') {
-    if ($isAdmin) {
-        $verifiedRoll = $searchRoll;
-    } else {
-        $dob = trim((string)($_GET['dob'] ?? ''));
-        if ($dob === '') {
-            json_response(['error' => 'Date of birth is required for student verification'], 400);
-        }
-
-        // Apply rate limiting per IP+roll
-        $clientIp = get_client_ip();
-        $rollKey = 'room_search:' . substr($searchRoll, 0, 36);
-        if (!check_ip_rate_limit($rollKey, 30, 60, $clientIp) || !check_ip_rate_limit('seat_search_ip', 300, 60, $clientIp)) {
-            json_response(['error' => 'Too many search requests. Please wait a moment before searching again.'], 429);
-        }
-        record_ip_failed_attempt($rollKey, 30, 60, 60, $clientIp);
-        record_ip_failed_attempt('seat_search_ip', 300, 60, 60, $clientIp);
-
-        $stuCheck = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) = ?");
-        $stuCheck->execute([$searchRoll]);
-        $actualDob = $stuCheck->fetchColumn();
-
-        $noMatchMsg = 'No student found matching the provided roll number and date of birth.';
-        if ($actualDob === false || $actualDob === null || trim((string)$actualDob) === '' || strtotime((string)$actualDob) === false || strtotime($dob) === false) {
-            json_response(['error' => $noMatchMsg], 404);
-        }
-
-        $actualNorm = date('Y-m-d', (int)strtotime((string)$actualDob));
-        $inputNorm = date('Y-m-d', (int)strtotime($dob));
-        if ($actualNorm !== $inputNorm) {
-            json_response(['error' => $noMatchMsg], 404);
-        }
-        $verifiedRoll = $searchRoll;
-    }
+    $verifiedRoll = $searchRoll;
 }
 
 $seats = [];

@@ -51,7 +51,7 @@ function getCountdown(examDate, startTime) {
   return 'Starts in 2d 4h';
 }
 
-export default function SeatCard({ data, dob }) {
+export default function SeatCard({ data }) {
   const toast = useToast();
   const [copiedPass, setCopiedPass] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -102,7 +102,7 @@ Desk Coordinates: Row ${data.row_num}, Column ${data.col_num} · Desk #${data.be
   };
 
   const copyShareLink = async () => {
-    const shareUrl = `${window.location.origin}/find?roll=${encodeURIComponent(data.roll_no)}${dob ? `&dob=${encodeURIComponent(dob)}` : ''}`;
+    const shareUrl = `${window.location.origin}/find?roll=${encodeURIComponent(data.roll_no)}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
@@ -273,7 +273,7 @@ Desk Coordinates: Row ${data.row_num}, Column ${data.col_num} · Desk #${data.be
 
           <Link
             className="btn-outline"
-            to={`/room/${data.room_id}?exam=${data.exam_id}&highlight=${data.roll_no}${dob ? `&dob=${encodeURIComponent(dob)}` : ''}`}
+            to={`/room/${data.room_id}?exam=${data.exam_id}&highlight=${data.roll_no}`}
             aria-label="View Classroom Floor Plan"
           >
             <MapPin size={16} /> View Map

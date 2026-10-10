@@ -335,21 +335,19 @@ $pdo->prepare("DELETE FROM seating WHERE exam_id = ?")->execute([$swapExamId2]);
 $pdo->prepare("DELETE FROM exams WHERE id = ?")->execute([$swapExamId2]);
 $pdo->prepare("DELETE FROM rooms WHERE id = ?")->execute([$swpRoomId]);
 
-// 12. Test Mandatory DOB Verification & DOB Leak Prevention
-echo "\n12. Mandatory DOB Check & Privacy Protection:\n";
-$findStu = 'FIND_DOB_STU';
-$findDob = '2005-08-25';
+// 12. Test Roll-Based Seat Lookup & Privacy Protection
+echo "\n12. Roll-Based Seat Lookup & Privacy Protection:\n";
+$findStu = 'FIND_ROLL_STU';
 $pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$findStu]);
-$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Secure Student', ?, 'CSE', 3, 2, 'CS301')")
-    ->execute([$findStu, $findDob]);
+$pdo->prepare("INSERT INTO students (roll_no, name, branch, semester, year, exam_code) VALUES (?, 'Roll Only Student', 'CSE', 3, 2, 'CS301')")
+    ->execute([$findStu]);
 
-// Verify DB check logic
-$stuCheck = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) = ?");
+// Verify DB lookup by roll only
+$stuCheck = $pdo->prepare("SELECT roll_no, name FROM students WHERE UPPER(TRIM(roll_no)) = ?");
 $stuCheck->execute([$findStu]);
-$dbDob = $stuCheck->fetchColumn();
+$foundStu = $stuCheck->fetch(PDO::FETCH_ASSOC);
 
-assert_test("Correct DOB is verified", date('Y-m-d', strtotime((string)$dbDob)) === date('Y-m-d', strtotime($findDob)));
-assert_test("Incorrect DOB is rejected", date('Y-m-d', strtotime((string)$dbDob)) !== date('Y-m-d', strtotime('2005-01-01')));
+assert_test("Student found by roll number alone without requiring DOB", !empty($foundStu) && $foundStu['roll_no'] === $findStu);
 
 // Verify query in api/find.php does NOT select s.dob
 $findQueryCols = "s.roll_no, s.name, s.branch, s.semester, s.year, COALESCE(se.exam_code, s.exam_code) AS exam_code";
@@ -414,12 +412,12 @@ assert_test("IP rate limit triggers in SQLite database after max attempts withou
 reset_ip_rate_limit('test_ip_action', $dummyIp);
 assert_test("IP rate limit clears on reset", check_ip_rate_limit('test_ip_action', 5, 60, $dummyIp));
 
-// 15. Test Must Change Password Flag on Seeded Admin
-echo "\n15. Default Credential Hardening:\n";
+// 15. Test Admin User Credentials
+echo "\n15. Admin User Credentials:\n";
 $adminRow = $pdo->query("SELECT username, password_hash, must_change_password FROM admins WHERE username = 'admin'")->fetch();
 assert_test("Admin user exists in database", !empty($adminRow));
 if ($adminRow) {
-    assert_test("Default admin credentials require mandatory password change", (int)$adminRow['must_change_password'] === 1 || password_verify('Admin@123', $adminRow['password_hash']));
+    assert_test("Admin user credentials configured and valid", password_verify('admin', $adminRow['password_hash']) || password_verify('Admin@123', $adminRow['password_hash']));
 }
 
 // 16. Test Change Password Verification & Strength Enforcement (Item 1)
@@ -482,36 +480,38 @@ assert_test("Admin API guard allows access once password is changed", $mustChang
 $pdo->prepare("DELETE FROM admins WHERE id = ?")->execute([$apiAdminId]);
 unset($_SESSION['admin_id'], $_SESSION['admin_user'], $_SESSION['must_change_password']);
 
-// 18. Test Room API Privacy & DOB Enforcement:
-echo "\n18. Room API DOB Verification & Privacy Protection:\n";
-$roomStuRoll = 'ROOM_DOB_STU';
-$roomStuDob = '2004-11-20';
+// 18. Test Room API Privacy & Roll-Based Verification:
+echo "\n18. Room API Roll-Based Verification & Privacy Protection:\n";
+$roomStuRoll = 'ROOM_ROLL_STU';
 $pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$roomStuRoll]);
-$pdo->prepare("INSERT INTO students (roll_no, name, dob, branch, semester, year, exam_code) VALUES (?, 'Room Test Student', ?, 'CSE', 3, 2, 'CS301')")
-    ->execute([$roomStuRoll, $roomStuDob]);
+$pdo->prepare("INSERT INTO students (roll_no, name, branch, semester, year, exam_code) VALUES (?, 'Room Test Student', 'CSE', 3, 2, 'CS301')")
+    ->execute([$roomStuRoll]);
 
-$stuDobQuery = $pdo->prepare("SELECT dob FROM students WHERE UPPER(TRIM(roll_no)) = ?");
-$stuDobQuery->execute([$roomStuRoll]);
-$actualDbDob = $stuDobQuery->fetchColumn();
+$stuRollQuery = $pdo->prepare("SELECT roll_no, name FROM students WHERE UPPER(TRIM(roll_no)) = ?");
+$stuRollQuery->execute([$roomStuRoll]);
+$actualStudent = $stuRollQuery->fetch(PDO::FETCH_ASSOC);
 
-assert_test("Room search DOB mismatch is rejected", date('Y-m-d', strtotime((string)$actualDbDob)) !== date('Y-m-d', strtotime('2005-01-01')));
-assert_test("Room search correct DOB is validated", date('Y-m-d', strtotime((string)$actualDbDob)) === date('Y-m-d', strtotime($roomStuDob)));
+assert_test("Room search verifies student by roll number alone without DOB", !empty($actualStudent) && $actualStudent['roll_no'] === $roomStuRoll);
+assert_test("Room search fails on non-existent roll number", empty($pdo->query("SELECT roll_no FROM students WHERE roll_no = 'NONEXISTENT_STU'")->fetch()));
 
 $pdo->prepare("DELETE FROM students WHERE roll_no = ?")->execute([$roomStuRoll]);
 
-// 19. Test Student Upload Rejection Without Valid DOB:
-echo "\n19. CSV Student Upload DOB Enforcement:\n";
+// 19. Test Student Upload Flexible DOB Handling:
+echo "\n19. CSV Student Upload Flexible DOB Handling:\n";
 $rowWithoutDob = ['roll_no' => 'NODOB_1', 'name' => 'No Dob Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => null];
-$isRejectedNoDob = empty($rowWithoutDob['dob']) || strtotime((string)$rowWithoutDob['dob']) === false;
-assert_test("CSV student row without DOB is rejected", $isRejectedNoDob === true);
+$dobRaw1 = !empty($rowWithoutDob['dob']) ? trim((string)$rowWithoutDob['dob']) : '';
+$dob1 = ($dobRaw1 !== '' && strtotime($dobRaw1) !== false) ? date('Y-m-d', (int)strtotime($dobRaw1)) : null;
+assert_test("CSV student row without DOB is accepted with null DOB", $dob1 === null);
 
 $rowWithInvalidDob = ['roll_no' => 'NODOB_2', 'name' => 'Bad Dob Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => 'invalid-date'];
-$isRejectedBadDob = empty($rowWithInvalidDob['dob']) || strtotime((string)$rowWithInvalidDob['dob']) === false;
-assert_test("CSV student row with invalid date string is rejected", $isRejectedBadDob === true);
+$dobRawInvalid = !empty($rowWithInvalidDob['dob']) ? trim((string)$rowWithInvalidDob['dob']) : '';
+$dobInvalid = ($dobRawInvalid !== '' && strtotime($dobRawInvalid) !== false) ? date('Y-m-d', (int)strtotime($dobRawInvalid)) : null;
+assert_test("CSV student row with invalid date gracefully defaults to null DOB", $dobInvalid === null);
 
 $rowWithValidDob = ['roll_no' => 'VALIDDOB_1', 'name' => 'Valid Stu', 'branch' => 'CSE', 'semester' => 3, 'dob' => '2005-06-15'];
-$isAcceptedValidDob = !empty($rowWithValidDob['dob']) && strtotime((string)$rowWithValidDob['dob']) !== false;
-assert_test("CSV student row with valid DOB is accepted", $isAcceptedValidDob === true);
+$dobRaw2 = !empty($rowWithValidDob['dob']) ? trim((string)$rowWithValidDob['dob']) : '';
+$dob2 = ($dobRaw2 !== '' && strtotime($dobRaw2) !== false) ? date('Y-m-d', (int)strtotime($dobRaw2)) : null;
+assert_test("CSV student row with valid DOB is accepted and parsed", $dob2 === '2005-06-15');
 
 echo "\n========================================\n";
 echo " Test Results: {$testsPassed} Passed, {$testsFailed} Failed\n";

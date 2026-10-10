@@ -95,13 +95,9 @@ try {
         }
         $yr = (int)ceil($sem / 2);
 
-        // Reject CSV rows without a valid Date of Birth
+        // Optional Date of Birth
         $dobRaw = !empty($r['dob']) ? trim((string)$r['dob']) : '';
-        if ($dobRaw === '' || strtotime($dobRaw) === false) {
-            $skipped++;
-            continue;
-        }
-        $dob = date('Y-m-d', (int)strtotime($dobRaw));
+        $dob = ($dobRaw !== '' && strtotime($dobRaw) !== false) ? date('Y-m-d', (int)strtotime($dobRaw)) : null;
 
         $examCode = !empty($r['exam_code']) ? trim((string)$r['exam_code']) : null;
         $examId = !empty($r['exam_id']) ? (int)$r['exam_id'] : null;

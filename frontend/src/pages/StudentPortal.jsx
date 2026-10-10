@@ -26,31 +26,6 @@ const fmtTime = (t) => {
   });
 };
 
-// DOB formatting helpers (typed DD / MM / YYYY field)
-function formatDobInput(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)} / ${digits.slice(2)}`;
-  return `${digits.slice(0, 2)} / ${digits.slice(2, 4)} / ${digits.slice(4)}`;
-}
-
-function parseDobToISO(displayVal) {
-  const digits = displayVal.replace(/\D/g, '');
-  if (digits.length === 8) {
-    const d = digits.slice(0, 2);
-    const m = digits.slice(2, 4);
-    const y = digits.slice(4, 8);
-    return `${y}-${m}-${d}`;
-  }
-  return '';
-}
-
-function formatISOToDisplay(isoVal) {
-  if (!isoVal || !/^\d{4}-\d{2}-\d{2}$/.test(isoVal)) return isoVal || '';
-  const [y, m, d] = isoVal.split('-');
-  return `${d} / ${m} / ${y}`;
-}
-
 // ICS Calendar download helper
 function downloadCalendarEvent(seat) {
   const dateStr = seat.exam_date;
@@ -174,12 +149,6 @@ export default function StudentPortal() {
   const toast = useToast();
 
   const [roll, setRoll] = useState(params.get('roll') || '');
-  const [dobDisplay, setDobDisplay] = useState(() => {
-    const raw = params.get('dob');
-    if (raw) return formatISOToDisplay(raw);
-    return '01 / 01 / 2005';
-  });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
@@ -191,21 +160,16 @@ export default function StudentPortal() {
     { roll: '2116241801001', label: 'AI&DS' },
     { roll: '2116251001001', label: 'IT' },
     { roll: '2116250701001', label: 'CSE' },
-    { roll: '2116241501001', label: 'AI&ML' },
+    { roll: '2116241101001', label: 'MECH' },
   ];
 
   // Search logic
   const handleFind = useCallback(
-    async (targetRoll, targetDobISO, targetExamId = null) => {
+    async (targetRoll = null, targetExamId = null) => {
       const qRoll = String(targetRoll ?? roll).trim().toUpperCase();
-      const qDob = String(targetDobISO ?? parseDobToISO(dobDisplay)).trim();
 
       if (!qRoll) {
         toast('Enter your roll number to find your seat');
-        return;
-      }
-      if (!qDob) {
-        toast('Enter your date of birth as DD / MM / YYYY');
         return;
       }
 
@@ -213,7 +177,7 @@ export default function StudentPortal() {
       setError('');
 
       try {
-        const res = await api.findSeat(qRoll, qDob, targetExamId);
+        const res = await api.findSeat(qRoll, targetExamId);
         if (res.seat) {
           setResult(res);
           setActiveExamId(res.seat.exam_id);
@@ -224,7 +188,6 @@ export default function StudentPortal() {
               STORAGE_KEY,
               JSON.stringify({
                 roll: qRoll,
-                dob: qDob,
                 res,
               })
             );
@@ -233,30 +196,29 @@ export default function StudentPortal() {
           // Load room map
           if (res.seat.room_id) {
             try {
-              const rRes = await api.getRoom(res.seat.room_id, res.seat.exam_id, qRoll, qDob);
+              const rRes = await api.getRoom(res.seat.room_id, res.seat.exam_id, qRoll);
               if (rRes.success && rRes.data) {
                 setRoom(rRes.data);
               }
             } catch {}
           }
         } else {
-          setError(res.error || 'We couldn’t find that roll number and date of birth. Check both and try again.');
+          setError(res.error || 'We couldn’t find that roll number. Check the number and try again.');
         }
       } catch (err) {
-        setError(err.message || 'We couldn’t find that roll number and date of birth. Check both and try again.');
+        setError(err.message || 'We couldn’t find that roll number. Check the number and try again.');
       } finally {
         setLoading(false);
       }
     },
-    [roll, dobDisplay, toast]
+    [roll, toast]
   );
 
   // Restore last result on load or URL search
   useEffect(() => {
     const qRoll = params.get('roll');
-    const qDob = params.get('dob');
-    if (qRoll && qDob) {
-      handleFind(qRoll, qDob);
+    if (qRoll) {
+      handleFind(qRoll);
       return;
     }
 
@@ -266,13 +228,12 @@ export default function StudentPortal() {
         const parsed = JSON.parse(saved);
         if (parsed?.res?.seat) {
           setRoll(parsed.roll);
-          setDobDisplay(formatISOToDisplay(parsed.dob));
           setResult(parsed.res);
           setActiveExamId(parsed.res.seat.exam_id);
 
           // Fetch fresh room data in background
           api
-            .getRoom(parsed.res.seat.room_id, parsed.res.seat.exam_id, parsed.roll, parsed.dob)
+            .getRoom(parsed.res.seat.room_id, parsed.res.seat.exam_id, parsed.roll)
             .then((r) => {
               if (r?.data) setRoom(r.data);
             })
@@ -282,15 +243,9 @@ export default function StudentPortal() {
     } catch {}
   }, []);
 
-  const handleDobChange = (e) => {
-    const formatted = formatDobInput(e.target.value);
-    setDobDisplay(formatted);
-  };
-
   const handleSampleClick = (sample) => {
     setRoll(sample.roll);
-    setDobDisplay('01 / 01 / 2005');
-    handleFind(sample.roll, '2005-01-01');
+    handleFind(sample.roll);
   };
 
   const currentSeat = result?.seat;
@@ -306,7 +261,7 @@ export default function StudentPortal() {
             <BrandLogo variant="full" size={72} />
           </div>
           <p className="student-hero-sub">
-            Enter your university roll number and date of birth to find your exam hall and seat.
+            Enter your university roll number to find your exam hall and seat.
           </p>
         </div>
 
@@ -336,23 +291,6 @@ export default function StudentPortal() {
                 />
               </div>
 
-              <div className="form-field">
-                <label htmlFor="studentDobInput" className="field-label">
-                  Date of birth (DD / MM / YYYY)
-                </label>
-                <input
-                  id="studentDobInput"
-                  type="text"
-                  inputMode="numeric"
-                  className="field-input field-input-mono"
-                  placeholder="DD / MM / YYYY"
-                  value={dobDisplay}
-                  onChange={handleDobChange}
-                  required
-                  autoComplete="off"
-                />
-              </div>
-
               <div className="form-submit-cell">
                 <button
                   type="submit"
@@ -372,30 +310,28 @@ export default function StudentPortal() {
                   <button
                     key={s.roll}
                     type="button"
-                    className="demo-chip-btn"
+                    className="quick-chip-btn"
                     onClick={() => handleSampleClick(s)}
                   >
-                    <span>{s.label}</span>
-                    <code>{s.roll.slice(-4)}</code>
+                    {s.roll} ({s.label})
                   </button>
                 ))}
               </div>
             </div>
           </form>
 
-          {/* Friendly Error Message */}
           {error && (
-            <div className="student-error-banner" role="alert">
-              <AlertCircle size={18} className="flex-shrink-0" />
+            <div className="error-banner" role="alert">
+              <AlertCircle size={18} className="error-banner-icon" />
               <span>{error}</span>
             </div>
           )}
         </section>
 
-        {/* Result Screen */}
+        {/* The Result Screen */}
         {currentSeat && (
-          <article className="seat-result-article print-slip-area">
-            {/* Multi-Exam Tabs (Next Exam First) */}
+          <section className="student-result-card" aria-label="Seating details">
+            {/* Multi-Exam Switcher */}
             {allExams.length > 1 && (
               <div className="multi-exam-tabs no-print" role="tablist" aria-label="Exam sessions">
                 {allExams.map((ex) => (
@@ -406,7 +342,7 @@ export default function StudentPortal() {
                     className={`exam-tab ${activeExamId === ex.exam_id ? 'active' : ''}`}
                     onClick={() => {
                       setActiveExamId(ex.exam_id);
-                      handleFind(roll, parseDobToISO(dobDisplay), ex.exam_id);
+                      handleFind(roll, ex.exam_id);
                     }}
                   >
                     <span className="exam-tab-name">{ex.exam_name}</span>
@@ -423,108 +359,120 @@ export default function StudentPortal() {
               <p>Office of the Controller of Examinations</p>
             </div>
 
-            <div className="result-card">
-              {/* 1. Hall and block, in the biggest type */}
-              <div className="result-section result-hall-section">
-                <span className="result-kicker">Examination Hall &amp; Block</span>
-                <h1 className="result-hall-title">
-                  Hall {currentSeat.room_no}, {currentSeat.block}
-                </h1>
+            {/* Strict Result Order */}
+            <div className="result-core-hierarchy">
+              {/* 1. Hall & Block (Biggest Type) */}
+              <div className="result-hall-block">
+                <span className="result-hall-title">
+                  Hall {currentSeat.room_no}
+                </span>
+                <span className="result-block-subtitle">
+                  {currentSeat.block}
+                </span>
               </div>
 
-              {/* 2. Seat number */}
-              <div className="result-section result-seat-section">
-                <span className="result-kicker">Assigned Desk</span>
-                <div className="result-seat-number">
-                  Seat {currentSeat.bench_no || currentSeat.row_num}
+              {/* 2. Seat Number (Sturdy Serif Font) */}
+              <div className="result-seat-box">
+                <span className="result-seat-label">Allocated Seat</span>
+                <div className="result-seat-number font-serif">
+                  Seat #{currentSeat.bench_no || currentSeat.row_num}
+                  {sideLabel && <span className="result-seat-side">({sideLabel})</span>}
                 </div>
-                <div className="result-seat-sub">
-                  Row {currentSeat.row_num}, Column {currentSeat.col_num} · {sideLabel}
-                </div>
-              </div>
-
-              {/* 3. Exam name, date, start time and report by time */}
-              <div className="result-section result-exam-section">
-                <div className="exam-meta-grid">
-                  <div className="meta-tile">
-                    <span className="meta-label">Exam name</span>
-                    <strong className="meta-value">{currentSeat.exam_name}</strong>
-                  </div>
-                  <div className="meta-tile">
-                    <span className="meta-label">Date</span>
-                    <span className="meta-value">{fmtDate(currentSeat.exam_date)}</span>
-                  </div>
-                  <div className="meta-tile">
-                    <span className="meta-label">
-                      <Clock size={14} /> Start time
-                    </span>
-                    <strong className="meta-value">{fmtTime(currentSeat.start_time)}</strong>
-                  </div>
-                  <div className="meta-tile report-tile">
-                    <span className="meta-label">
-                      <Clock size={14} /> Report by
-                    </span>
-                    <strong className="meta-value highlight-sage">
-                      {fmtTime(currentSeat.reporting_time || currentSeat.start_time)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="candidate-strip">
-                  <span>Candidate: <strong>{currentSeat.name}</strong> ({currentSeat.roll_no})</span>
-                  <span>Branch: <strong>{currentSeat.branch}</strong> (Sem {currentSeat.semester})</span>
-                  <span>Paper code: <strong>{currentSeat.exam_code || 'Standard'}</strong></span>
+                <div className="result-seat-coords font-mono">
+                  Row {currentSeat.row_num} · Desk Column {currentSeat.col_num}
                 </div>
               </div>
 
-              {/* Mobile Quick Action Buttons (at least 48px tall) */}
-              <div className="result-actions-row no-print">
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={() => downloadSeatImage(currentSeat)}
-                >
-                  <ImageIcon size={18} />
-                  <span>Save as image</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={() => downloadCalendarEvent(currentSeat)}
-                >
-                  <Calendar size={18} />
-                  <span>Add to calendar</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={() => window.print()}
-                >
-                  <Printer size={18} />
-                  <span>Print slip</span>
-                </button>
+              {/* 3. Exam Name, Date, Start Time & Report-by Time */}
+              <div className="result-meta-grid">
+                <div className="meta-item">
+                  <span className="meta-label">Examination</span>
+                  <span className="meta-value">{currentSeat.exam_name}</span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Exam Date</span>
+                  <span className="meta-value d-flex align-items-center gap-1">
+                    <Calendar size={15} />
+                    {fmtDate(currentSeat.exam_date)}
+                  </span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Start Time</span>
+                  <span className="meta-value d-flex align-items-center gap-1">
+                    <Clock size={15} />
+                    {fmtTime(currentSeat.start_time)}
+                  </span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Report By</span>
+                  <span className="meta-value report-by-highlight">
+                    {fmtTime(currentSeat.reporting_time || currentSeat.start_time)}
+                  </span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Student</span>
+                  <span className="meta-value">
+                    {currentSeat.name} <span className="font-mono text-muted">({currentSeat.roll_no})</span>
+                  </span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Subject Code</span>
+                  <span className="meta-value font-mono">{currentSeat.exam_code}</span>
+                </div>
               </div>
 
-              {/* 4. The room map with the student's seat circled */}
+              {/* 4. Room Map with Circling Reveal */}
               {room && (
-                <div className="result-section result-map-section">
-                  <div className="map-section-header">
-                    <h3 className="map-section-title">Room Map &amp; Desk Location</h3>
-                    <p className="map-section-sub">
-                      Your seat is circled on the room map below.
-                    </p>
+                <div className="result-room-section">
+                  <div className="room-section-header">
+                    <h3 className="room-section-title font-serif">
+                      Room Map — Hall {currentSeat.room_no}
+                    </h3>
+                    <span className="room-section-meta font-mono">
+                      {room.rows_count} rows × {room.cols_count} desks/row
+                    </span>
                   </div>
+
                   <RoomGrid
-                    room={room.room}
-                    seats={room.seats}
+                    room={room}
                     highlightRoll={currentSeat.roll_no}
+                    targetRow={currentSeat.row_num}
+                    targetCol={currentSeat.col_num}
                   />
                 </div>
               )}
             </div>
-          </article>
+
+            {/* Quick Actions (Save as image, Add to calendar, Print) */}
+            <div className="result-actions-row no-print">
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => downloadSeatImage(currentSeat)}
+              >
+                <ImageIcon size={18} />
+                Save as image
+              </button>
+
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => downloadCalendarEvent(currentSeat)}
+              >
+                <Download size={18} />
+                Add to calendar
+              </button>
+
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => window.print()}
+              >
+                <Printer size={18} />
+                Print pass
+              </button>
+            </div>
+          </section>
         )}
       </div>
     </main>

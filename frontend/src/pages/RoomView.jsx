@@ -11,14 +11,13 @@ export default function RoomView() {
   const [error, setError] = useState('');
 
   const highlightRoll = params.get('highlight') || '';
-  const dob = params.get('dob') || '';
 
   useEffect(() => {
     api
-      .getRoom(roomId, params.get('exam') || '', highlightRoll, dob)
+      .getRoom(roomId, params.get('exam') || '', highlightRoll)
       .then((r) => setData(r.data))
       .catch((e) => setError(e.message));
-  }, [roomId, params, highlightRoll, dob]);
+  }, [roomId, params, highlightRoll]);
 
   if (error) {
     return (
@@ -49,7 +48,7 @@ export default function RoomView() {
     <div className="container" style={{ padding: '36px 0 60px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="no-print">
         <Link
-          to={highlightRoll ? `/find?roll=${encodeURIComponent(highlightRoll)}${dob ? `&dob=${encodeURIComponent(dob)}` : ''}` : '/find'}
+          to={highlightRoll ? `/find?roll=${encodeURIComponent(highlightRoll)}` : '/find'}
           className="btn-outline"
           style={{ height: 38, fontSize: '0.85rem' }}
         >

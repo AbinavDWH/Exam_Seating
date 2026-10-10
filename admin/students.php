@@ -28,11 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $yr = (int)ceil($sem / 2);
         $dobRaw = trim((string)($_POST['dob'] ?? ''));
-        if ($dobRaw === '' || strtotime($dobRaw) === false) {
-            header('Location: students.php?toast=' . urlencode('Valid Date of Birth is required'));
-            exit;
-        }
-        $dob = date('Y-m-d', (int)strtotime($dobRaw));
+        $dob = ($dobRaw !== '' && strtotime($dobRaw) !== false) ? date('Y-m-d', (int)strtotime($dobRaw)) : null;
         $examCode = trim((string)($_POST['exam_code'] ?? ''));
         if ($examCode === '') {
             $examCode = $branch . '-S' . $sem;
@@ -200,8 +196,8 @@ $deptBadgeClass = [
             <input name="semester" id="stu_sem" type="number" min="1" max="8" class="form-control" placeholder="1 to 8" value="5" required>
           </div>
           <div class="col-md-6">
-            <label class="form-label" for="stu_dob">Date of Birth</label>
-            <input name="dob" id="stu_dob" type="date" class="form-control" required>
+            <label class="form-label" for="stu_dob">Date of Birth (Optional)</label>
+            <input name="dob" id="stu_dob" type="date" class="form-control">
           </div>
           <div class="col-md-6">
             <label class="form-label" for="stu_code">Exam Paper Code</label>

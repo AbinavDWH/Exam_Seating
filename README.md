@@ -77,8 +77,7 @@ This concurrently starts:
 | `2116251401001` | Bala Balakrishnan | CSBS | Sem 3 (2nd Year) | A204 | MC23313 |
 | `2116241101001` | Vasanth H. | MECH | Sem 5 (3rd Year) | B426 | ME23511 |
 | `2116240901001` | Shiva G. | EEE | Sem 5 (3rd Year) | C202 | EE23531 |
-| `2116240101001` | Sneha N. | AERO | Sem 5 (3rd Year) | A202 | AE23531 |
-*(Default DOB for verification: `2005-01-01`)*
+*(Students can find their allocated seat using their roll number alone)*
 
 ---
 
@@ -140,7 +139,7 @@ npm test
 │   ├── print_plan.php          # Printable invigilator seating sheets
 │   └── login.php               # Admin authentication & brute-force guard
 ├── api/                        # REST API Endpoints (PHP)
-│   ├── find.php                # Student seat lookup & DOB verification
+│   ├── find.php                # Student seat lookup (roll-based)
 │   ├── exams.php               # Exam session list & system metrics
 │   ├── room.php                # Privacy-preserving room grid layout
 │   ├── swap.php                # Atomic seat swap API with clash detection

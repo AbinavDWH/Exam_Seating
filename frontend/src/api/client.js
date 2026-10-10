@@ -11,10 +11,10 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  findSeat: (roll, dob, examId = null) =>
-    request(`find.php?roll=${encodeURIComponent(roll)}${dob ? `&dob=${encodeURIComponent(dob)}` : ''}${examId ? `&exam_id=${examId}` : ''}`),
-  getRoom: (roomId, examId, searchRoll, dob) =>
-    request(`room.php?room_id=${roomId}${examId ? `&exam_id=${examId}` : ''}${searchRoll ? `&search_roll=${encodeURIComponent(searchRoll)}` : ''}${dob ? `&dob=${encodeURIComponent(dob)}` : ''}`),
+  findSeat: (roll, examId = null) =>
+    request(`find.php?roll=${encodeURIComponent(roll)}${examId ? `&exam_id=${examId}` : ''}`),
+  getRoom: (roomId, examId, searchRoll) =>
+    request(`room.php?room_id=${roomId}${examId ? `&exam_id=${examId}` : ''}${searchRoll ? `&search_roll=${encodeURIComponent(searchRoll)}` : ''}`),
   getExams: () => request('exams.php'),
 };
 
