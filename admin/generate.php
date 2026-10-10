@@ -145,7 +145,7 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
       <div class="p-3 mb-3 rounded-3" style="background:#FAF8F5; border:1px solid var(--border,#D8CFBF);">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <div id="resultSentence" style="font-family:var(--font-serif,'DM Serif Display',serif); font-size:1.75rem; color:var(--ink-text,#2B2E27); font-weight:600; line-height:1.2;">
+            <div id="resultSentence" style="font-family:'Plus Jakarta Sans', system-ui, sans-serif; font-size:1.75rem; color:var(--ink-text,#2B2E27); font-weight:600; line-height:1.2;">
               —
             </div>
             <div id="resultSub" class="small text-muted mt-1">

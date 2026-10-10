@@ -33,9 +33,9 @@
   --danger-border: #F0CFC7;
 
   /* Typography */
-  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-serif: var(--font-sans);
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: var(--font-sans);
 
   /* Border Radius Scale: small for controls, larger for cards, square-ish for seats */
   --radius-control: 8px;
@@ -111,9 +111,10 @@ button, input, select, textarea {
 }
 
 .brand-name-text {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 1.4rem;
-  font-weight: 400;
+  
   letter-spacing: -0.01em;
   color: var(--text);
 }
@@ -220,7 +221,8 @@ button, input, select, textarea {
 }
 
 .field-input-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
 
@@ -297,7 +299,8 @@ button, input, select, textarea {
 }
 
 .demo-chip-btn code {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
   color: var(--text-muted);
 }
@@ -406,12 +409,13 @@ button, input, select, textarea {
 }
 
 .result-seat-number {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: clamp(2.5rem, 6vw, 3.5rem);
   line-height: 1;
   color: var(--text);
   margin: 2px 0 6px;
-  font-weight: 400;
+  
 }
 
 .result-seat-sub {
@@ -927,3 +931,8 @@ button, input, select, textarea {
     border: 1px solid #000000 !important;
   }
 }
+
+/* ---- One typeface everywhere: Plus Jakarta Sans ---- */
+button, input, select, textarea { font-family: inherit; }
+h1, h2, h3, h4, h5, h6 { font-weight: 700; letter-spacing: -0.01em; }
+code, kbd, samp, pre { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }

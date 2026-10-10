@@ -63,7 +63,7 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
 <link rel="stylesheet" href="assets/fonts.css">
 <style>
   body {
-    font-family: 'Segoe UI', Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, 'Segoe UI', sans-serif;
     margin: 24px;
     color: #111;
     background: #fff;
@@ -173,7 +173,7 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
   .print-seat-cell b {
     display: block;
     font-size: 11px;
-    font-family: monospace;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums;
     font-weight: 700;
     color: #000;
   }

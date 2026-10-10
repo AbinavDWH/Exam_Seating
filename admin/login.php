@@ -11,9 +11,8 @@ $error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verify_csrf();
     if (!check_login_rate_limit('admin_login')) {
-        if (!check_login_rate_limit('admin_login')) {
-            $error = 'Too many tries. Wait a minute and try again.';
-        } else {
+        $error = 'Too many tries. Wait a minute and try again.';
+    } else {
             $username = trim($_POST['username'] ?? '');
             $password = (string)($_POST['password'] ?? '');
 
@@ -53,7 +52,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
             record_failed_login('admin_login');
             $error = 'We couldn’t sign you in. Check your username and password and try again.';
-        }
     }
 }
 ?>
@@ -65,6 +63,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 <title>Sign in · DeskMap</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/lib/bootstrap.min.css">
+<link rel="stylesheet" href="assets/lib/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 <style>
@@ -107,7 +107,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   }
 
   .login-title {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-weight: 700;
     font-size: 1.65rem;
     font-weight: 400;
     letter-spacing: -0.01em;
@@ -321,7 +321,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     padding: 2px 6px;
     border-radius: 6px;
     font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums;
     font-size: 0.78rem;
   }
 

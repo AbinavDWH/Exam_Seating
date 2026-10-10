@@ -25,6 +25,7 @@ $nav = [
 <title><?= htmlspecialchars($pageTitle ?? 'Admin') ?> · DeskMap University Portal</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/lib/bootstrap.min.css">
 <link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 </head>

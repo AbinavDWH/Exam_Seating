@@ -108,7 +108,7 @@ function downloadSeatImage(seat) {
   const seatSide = seat.col_num % 2 === 1 ? 'Left' : 'Right';
   const seatLabel = `Seat #${seat.bench_no || seat.row_num} (${seatSide})`;
   ctx.fillStyle = '#2B2E27';
-  ctx.font = 'bold 38px "DM Serif Display", serif';
+  ctx.font = 'bold 38px "Plus Jakarta Sans", sans-serif';
   ctx.fillText(seatLabel, 80, 295);
 
   // 3. Exam Details
@@ -178,25 +178,25 @@ export default function StudentPortal() {
 
       try {
         const res = await api.findSeat(qRoll, targetExamId);
-        if (res.seat) {
-          setResult(res);
-          setActiveExamId(res.seat.exam_id);
+        // find.php answers { success, data: { ...seat fields, all_exams } }
+        const seat = res.data;
+        if (res.success && seat) {
+          const normalized = { seat, all_exams: seat.all_exams || [] };
+          setResult(normalized);
+          setActiveExamId(seat.exam_id);
 
           // Cache last result so students retain it on phone reloads
           try {
             localStorage.setItem(
               STORAGE_KEY,
-              JSON.stringify({
-                roll: qRoll,
-                res,
-              })
+              JSON.stringify({ roll: qRoll, res: normalized })
             );
           } catch {}
 
           // Load room map
-          if (res.seat.room_id) {
+          if (seat.room_id) {
             try {
-              const rRes = await api.getRoom(res.seat.room_id, res.seat.exam_id, qRoll);
+              const rRes = await api.getRoom(seat.room_id, seat.exam_id, qRoll);
               if (rRes.success && rRes.data) {
                 setRoom(rRes.data);
               }
@@ -302,7 +302,8 @@ export default function StudentPortal() {
               </div>
             </div>
 
-            {/* Quick Demo Roll Chips */}
+            {/* Demo rolls: development builds only */}
+            {import.meta.env.DEV && (
             <div className="quick-chips-row">
               <span className="quick-chips-label">Demo rolls:</span>
               <div className="chips-list">
@@ -318,6 +319,7 @@ export default function StudentPortal() {
                 ))}
               </div>
             </div>
+            )}
           </form>
 
           {error && (

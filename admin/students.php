@@ -381,7 +381,7 @@ $deptBadgeClass = [
           <tbody>
           <?php foreach ($students as $s): ?>
             <tr>
-              <td class="fw-bold text-main" style="font-family: 'JetBrains Mono', monospace; font-size: 0.88rem;">
+              <td class="fw-bold text-main" style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; font-size: 0.88rem;">
                 <?= htmlspecialchars($s['roll_no']) ?>
               </td>
               <td>

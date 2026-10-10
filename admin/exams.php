@@ -445,9 +445,9 @@ $totalStudentsCount = (int)db()->query("SELECT COUNT(*) FROM students")->fetchCo
 
 <!-- Delete Confirmation Modal (Says what will be lost) -->
 <div class="side-panel-overlay" id="deleteModalOverlay" onclick="closeDeleteModal()"></div>
-<div class="side-panel" id="deleteConfirmModal" style="width: min(440px, 100vw); height: auto; top: 20%; bottom: auto; border-radius: 16px; margin: 0 auto; left: 0; right: 0;" role="dialog">
+<div class="side-panel side-panel-dialog" id="deleteConfirmModal" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmModalTitle" role="dialog">
   <div class="side-panel-header border-0 pb-0">
-    <h3 class="side-panel-title text-danger" style="font-size: 1.25rem;">Delete exam</h3>
+    <h3 class="side-panel-title text-danger" id="deleteConfirmModalTitle">Delete exam</h3>
     <button type="button" class="side-panel-close" onclick="closeDeleteModal()">
       <?= svg_icon('x', '', 18) ?>
     </button>

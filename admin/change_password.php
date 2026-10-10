@@ -48,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title>Change password · DeskMap</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/lib/bootstrap.min.css">
 <link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 <style>
@@ -111,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="text-center mb-3">
     <img src="assets/deskmap-full.svg" alt="DeskMap" style="width: 80px; height: auto;">
   </div>
-  <h2 style="font-family: 'DM Serif Display', Georgia, serif; font-size: 1.5rem; text-align: center; margin: 0 0 8px; font-weight: 400;">
+  <h2 style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 1.5rem; text-align: center; margin: 0 0 8px; font-weight: 700;">
     <?= !empty($_SESSION['must_change_password']) ? 'Set new password' : 'Change password' ?>
   </h2>
   <p class="text-muted small text-center mb-4" style="color: #6B6F62; font-size: 0.88rem;">
