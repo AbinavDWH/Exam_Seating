@@ -57,8 +57,10 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Seating Plan — <?= htmlspecialchars($exam['exam_name']) ?></title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<title>DeskMap Seating Plan — <?= htmlspecialchars($exam['exam_name']) ?></title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/fonts.css">
 <style>
   body {
     font-family: 'Segoe UI', Arial, sans-serif;
@@ -257,9 +259,7 @@ if ($selectedRoom === '' && !$showAll && $totalRoomsCount > 30) {
 ?>
 <div class="room-sheet">
   <div class="exam-header d-flex align-items-center justify-content-center gap-3">
-    <div style="width:36px;height:36px;background:#ea580c;border-radius:8px;display:grid;place-items:center;color:#fff;flex-shrink:0;">
-      <?= svg_icon('seat-grid', '', 20) ?>
-    </div>
+    <img src="assets/deskmap-full.svg" alt="DeskMap" style="width: 54px; height: auto; flex-shrink: 0;">
     <div>
       <h1 class="mb-0">OFFICE OF THE CONTROLLER OF EXAMINATIONS</h1>
       <div class="sub">

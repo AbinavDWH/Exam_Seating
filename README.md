@@ -1,4 +1,4 @@
-# 🎓 ExamSeat — Conflict-Free University Exam Seating System
+# 🎓 DeskMap — Conflict-Free University Exam Seating System
 
 > Fully aligned with the **R2023 IT / REC Web Technology** syllabus covering **HTML5/CSS3 (Unit I)**, **Client-Side JavaScript (Unit II)**, **PHP & Bootstrap (Unit III)**, and **ReactJS & React Dataflow (Units IV & V)**.
 
@@ -27,7 +27,7 @@
 
 ## 📚 Syllabus Alignment (R2023 IT / REC)
 
-| Unit | Syllabus Topic | Implementation in ExamSeat |
+| Unit | Syllabus Topic | Implementation in DeskMap |
 |---|---|---|
 | **Unit I: Web Basics, HTML & CSS** | Semantic tags, structure, CSS rules, Box model, styling, GIT | Semantic HTML5 (`<header>`, `<nav>`, `<main>`, `<section>`, `<footer>`), custom CSS variables, responsive box model, flexbox and grid layouts. |
 | **Unit II: Client-Side JavaScript** | DOM manipulation, forms, event listeners, loops, focus methods | Dynamic search input, client-side validation, clipboard copy, live toast notifications, keyboard shortcuts (`Enter` to search), recent search history in `localStorage`. |
@@ -152,7 +152,7 @@ npm test
 │   ├── auth.php                # Session authentication, CSRF, & rate limits
 │   └── seating_engine.php      # Fair, conflict-free algorithm & alternate spacing
 ├── database/
-│   ├── examseat.sql            # Schema + realistic multi-year seed data
+│   ├── deskmap.sql            # Schema + realistic multi-year seed data
 │   ├── init.php                # Database bootstrap script
 │   └── seed_admin.php          # Admin user seeder (preserves existing passwords)
 ├── frontend/                   # Unit-IV & V: Student Portal (ReactJS + Vite)

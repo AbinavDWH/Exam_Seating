@@ -16,16 +16,17 @@ $preselect = (int)($_GET['exam_id'] ?? 0);
   <div>
     <h1 class="page-title">
       <?= svg_icon('swap', 'text-primary', 26) ?>
-      Manual Seat Swap &amp; Clash Prevention
+      Swap Seats
     </h1>
     <div class="page-subtitle">
-      <span>Exchange desk assignments between two students with real-time adjacency conflict checking</span>
+      <span>Click any two seats on the room map to swap student assignments</span>
     </div>
   </div>
 </div>
 
 <div class="row g-4">
-  <div class="col-lg-5">
+  <!-- Left Side: Selection & Controls (col-lg-4) -->
+  <div class="col-lg-4">
     <div class="table-card">
       <div class="card-title-header mb-3">
         <div class="card-title-icon">
@@ -33,17 +34,13 @@ $preselect = (int)($_GET['exam_id'] ?? 0);
         </div>
         <div class="card-title-text">
           <h6>Swap Student Seats</h6>
-          <p>Exchanges desk coordinates between two candidates and verifies adjacent paper conflict safety.</p>
+          <p>Click two seats on the map to exchange desks.</p>
         </div>
       </div>
 
-      <!-- Step 1 Block: Target Examination (Item 19) -->
-      <div class="step-block mb-3">
-        <div class="step-block-header">
-          <span class="step-number">1</span>
-          <span>Select Examination</span>
-        </div>
-        <label class="form-label" for="swapExam">Target Exam Session</label>
+      <!-- Exam Selector -->
+      <div class="mb-3">
+        <label class="form-label" for="swapExam">Target examination</label>
         <select id="swapExam" class="form-select" onchange="handleExamChange()">
           <option value="">— Select an exam session —</option>
           <?php foreach ($exams as $e): ?>
@@ -54,421 +51,459 @@ $preselect = (int)($_GET['exam_id'] ?? 0);
         </select>
       </div>
 
-      <!-- Step 2 Block: Students to Swap (Item 19, 20, 21) -->
-      <div class="step-block mb-3">
-        <div class="step-block-header">
-          <span class="step-number">2</span>
-          <span>Students to Swap</span>
+      <!-- Selected Seats Container -->
+      <div class="mb-3">
+        <label class="form-label">Selected seats</label>
+        
+        <!-- Seat A Card -->
+        <div id="seatCardA" class="p-2.5 rounded-3 border mb-2" style="background:#FAF8F5; border-color:var(--border,#D8CFBF);">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="badge" style="background:#FFBDA3; color:#2B2E27; font-weight:700;">Seat 1</span>
+            <span id="seatARoll" class="font-monospace small fw-bold text-muted">—</span>
+          </div>
+          <div id="seatAName" class="fw-semibold text-main small">Click a seat on the map</div>
+          <div id="seatAMeta" class="text-muted small" style="font-size:0.75rem;">—</div>
         </div>
 
-        <!-- Student A -->
-        <div class="mb-3">
-          <label class="form-label" for="rollA">First Student Roll Number</label>
-          <input type="text" id="rollA" class="form-control" placeholder="e.g. 2116241801001" style="text-transform:uppercase" oninput="lookupStudent('A')">
-          <!-- Live Candidate A Card (Item 21) -->
-          <div id="previewCardA" class="mt-2 p-2.5 rounded-3 border bg-light small" style="display:none;"></div>
-        </div>
-
-        <!-- Student B -->
-        <div class="mb-1">
-          <label class="form-label" for="rollB">Second Student Roll Number</label>
-          <input type="text" id="rollB" class="form-control" placeholder="e.g. 2116251001001" style="text-transform:uppercase" oninput="lookupStudent('B')">
-          <!-- Live Candidate B Card (Item 21) -->
-          <div id="previewCardB" class="mt-2 p-2.5 rounded-3 border bg-light small" style="display:none;"></div>
+        <!-- Seat B Card -->
+        <div id="seatCardB" class="p-2.5 rounded-3 border" style="background:#FAF8F5; border-color:var(--border,#D8CFBF);">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="badge" style="background:#8B9A6E; color:#FFFFFF; font-weight:700;">Seat 2</span>
+            <span id="seatBRoll" class="font-monospace small fw-bold text-muted">—</span>
+          </div>
+          <div id="seatBName" class="fw-semibold text-main small">Click second seat to swap</div>
+          <div id="seatBMeta" class="text-muted small" style="font-size:0.75rem;">—</div>
         </div>
       </div>
 
-      <button id="previewBtn" class="btn btn-grad w-100 py-2.5">
-        <span id="previewLabel" class="d-inline-flex align-items-center gap-1.5">
-          <?= svg_icon('search', '', 18) ?>
-          Preview Swap &amp; Check Clashes
-        </span>
-      </button>
+      <!-- Clash Status / Warnings -->
+      <div id="clashStatusBox" class="mb-3" style="display:none;"></div>
+
+      <!-- Force Swap Checkbox -->
+      <div id="forceWrapper" class="form-check mb-3" style="display:none;">
+        <input class="form-check-input" type="checkbox" id="forceSwapCheck">
+        <label class="form-check-label small" for="forceSwapCheck" style="color:var(--brand-red,#9C4632); font-weight:600;">
+          This swap creates conflicts. Proceed anyway.
+        </label>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="d-flex gap-2">
+        <button id="executeSwapBtn" class="btn btn-grad flex-grow-1 py-2.5" disabled onclick="executeSwap()">
+          Swap seats
+        </button>
+        <button type="button" class="btn btn-outline-secondary px-3 py-2.5" onclick="clearSeatSelection()">
+          Clear
+        </button>
+      </div>
+
+      <!-- Optional quick search -->
+      <div class="mt-3 pt-3 border-top">
+        <label class="form-label small text-muted" for="rollSearchInput">Search seat by roll number</label>
+        <div class="d-flex gap-1.5">
+          <input type="text" id="rollSearchInput" class="form-control form-control-sm font-monospace" placeholder="e.g. 2116241801001" style="text-transform:uppercase;">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="findAndSelectByRoll()">Select</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="col-lg-7">
-    <!-- Placeholder (Item 28) -->
-    <div class="table-card text-muted text-center p-5" id="swapPlaceholder">
-      <div class="empty-state-icon mx-auto mb-3">
-        <?= svg_icon('swap', '', 28) ?>
-      </div>
-      <h6 class="fw-bold text-main">Ready to Inspect &amp; Swap</h6>
-      <p class="text-muted small mb-0">Select an exam session, enter both roll numbers, and click <strong>Preview Swap &amp; Check Clashes</strong>.</p>
-    </div>
-
-    <!-- Preview & Clash Panel (Item 22) -->
-    <div class="table-card" id="swapPanel" style="display:none">
+  <!-- Right Side: Visual Room Map (col-lg-8) -->
+  <div class="col-lg-8">
+    <div class="table-card">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex align-items-center gap-2">
-          <div class="text-primary"><?= svg_icon('swap', '', 20) ?></div>
-          <h6 class="fw-bold mb-0">Seat Swap Preview &amp; Verification</h6>
+        <div>
+          <h6 class="fw-bold mb-0">Examination Room Map</h6>
+          <span class="text-muted small">Click any seat to pick Seat 1 (Peach), then another to pick Seat 2 (Sage)</span>
         </div>
-        <span class="status-pill status-upcoming" id="swapBadge">Checking…</span>
+        <div id="roomMetaLabel" class="text-muted small"></div>
       </div>
 
-      <div class="row g-3 mb-3">
-        <!-- Student A Card -->
-        <div class="col-md-6">
-          <div class="p-3 rounded-3 border bg-light h-100" id="cardA">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <span class="badge bg-primary">Candidate A</span>
-              <span class="small text-muted font-monospace fw-bold" id="aRoll"></span>
-            </div>
-            <h6 class="fw-bold mb-1 text-main" id="aName">—</h6>
-            <div class="small text-muted mb-2">
-              <span id="aBranch"></span> · Paper: <b id="aCode"></b>
-            </div>
-            <div class="p-2.5 rounded border bg-white small">
-              <div class="text-muted"><b>Current:</b> Hall <span id="aCurRoom" class="text-dark fw-bold"></span> (Row <span id="aCurRow"></span>, Col <span id="aCurCol"></span>)</div>
-              <div class="text-success mt-1 fw-semibold"><b>Will Move To:</b> Hall <span id="aNewRoom" class="fw-bold"></span> (Row <span id="aNewRow"></span>, Col <span id="aNewCol"></span>)</div>
-            </div>
-          </div>
-        </div>
+      <!-- Room Navigation Tabs (if multiple halls) -->
+      <div id="roomTabs" class="swap-room-tabs" style="display:none;"></div>
 
-        <!-- Student B Card -->
-        <div class="col-md-6">
-          <div class="p-3 rounded-3 border bg-light h-100" id="cardB">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <span class="badge bg-secondary text-white">Candidate B</span>
-              <span class="small text-muted font-monospace fw-bold" id="bRoll"></span>
-            </div>
-            <h6 class="fw-bold mb-1 text-main" id="bName">—</h6>
-            <div class="small text-muted mb-2">
-              <span id="bBranch"></span> · Paper: <b id="bCode"></b>
-            </div>
-            <div class="p-2.5 rounded border bg-white small">
-              <div class="text-muted"><b>Current:</b> Hall <span id="bCurRoom" class="text-dark fw-bold"></span> (Row <span id="bCurRow"></span>, Col <span id="bCurCol"></span>)</div>
-              <div class="text-success mt-1 fw-semibold"><b>Will Move To:</b> Hall <span id="bNewRoom" class="fw-bold"></span> (Row <span id="bNewRow"></span>, Col <span id="bNewCol"></span>)</div>
-            </div>
-          </div>
+      <!-- Visual Hall Container -->
+      <div id="swapMapPlaceholder" class="text-muted text-center p-5">
+        <div class="empty-state-icon mx-auto mb-3">
+          <?= svg_icon('swap', '', 28) ?>
         </div>
+        <h6 class="fw-bold text-main">Select an exam session</h6>
+        <p class="text-muted small mb-0">Choose an exam above to load the interactive seating map.</p>
       </div>
 
-      <!-- Verdict & Clash Warnings Box (Item 22) -->
-      <div id="swapWarnings" class="mb-3"></div>
+      <div id="swapMapContent" style="display:none;">
+        <div class="hall-board-indicator mb-3">Front · Board</div>
+        <div id="swapGrid" class="d-flex flex-column gap-2 mb-3"></div>
 
-      <!-- Action Box -->
-      <div class="p-3 rounded-3 border bg-light d-flex flex-column gap-2" id="swapActionBox">
-        <div class="form-check" id="forceCheckWrapper" style="display:none">
-          <input class="form-check-input" type="checkbox" id="forceSwapCheck" onchange="handleForceCheckChange()">
-          <label class="form-check-label small text-danger fw-semibold" for="forceSwapCheck">
-            I understand that this swap causes adjacent paper conflicts. Proceed anyway.
-          </label>
-        </div>
-        <div class="d-flex gap-2">
-          <button id="confirmSwapBtn" class="btn btn-success px-4 py-2 fw-semibold">
-            Confirm &amp; Execute Swap
-          </button>
-          <button id="cancelSwapBtn" class="btn btn-outline-secondary px-3 py-2" onclick="resetSwap()">
-            Cancel
-          </button>
+        <!-- Map Legend -->
+        <div class="d-flex gap-3 flex-wrap pt-3 border-top text-muted small align-items-center">
+          <span class="fw-semibold text-main">Legend:</span>
+          <span class="d-inline-flex align-items-center gap-1.5">
+            <span style="width:14px; height:14px; background:#FFBDA3; border:1px solid #E27A55; border-radius:3px; display:inline-block;"></span>
+            Seat 1
+          </span>
+          <span class="d-inline-flex align-items-center gap-1.5">
+            <span style="width:14px; height:14px; background:#8B9A6E; border:1px solid #58693F; border-radius:3px; display:inline-block;"></span>
+            Seat 2
+          </span>
+          <span class="d-inline-flex align-items-center gap-1.5">
+            <span style="width:14px; height:14px; background:rgba(156,70,50,0.2); border:1px solid #9C4632; border-radius:3px; display:inline-block;"></span>
+            Clash
+          </span>
+          <span class="d-inline-flex align-items-center gap-1.5">
+            <span style="width:14px; height:14px; background:#FAF8F5; border:1px solid #D8CFBF; border-radius:3px; display:inline-block;"></span>
+            Seated
+          </span>
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Recent Swaps Audit Log (Item 24) -->
-<div class="table-card mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="d-flex align-items-center gap-2">
-      <div class="text-primary"><?= svg_icon('clock', '', 18) ?></div>
-      <h6 class="fw-bold mb-0">Recent Swaps Audit Log</h6>
-    </div>
-    <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none p-0" onclick="clearRecentSwaps()">Clear Log</button>
-  </div>
-  <div id="recentSwapsContainer">
-    <div class="text-muted small text-center py-3" id="noRecentSwapsMsg">
-      No seat swaps executed in this session yet.
-    </div>
-    <div class="d-flex flex-column gap-2" id="recentSwapsList" style="display:none;"></div>
   </div>
 </div>
 
 <script>
-let currentSwapData = null;
-const RECENT_SWAPS_KEY = 'examseat_recent_swaps';
+let currentRooms = [];
+let currentSeats = [];
+let activeRoomId = null;
+let selectedSeatA = null;
+let selectedSeatB = null;
+let currentClashes = [];
+let conflictingSeatKeys = new Set();
 
-const previewBtn = document.getElementById('previewBtn');
-const confirmSwapBtn = document.getElementById('confirmSwapBtn');
-
-let lookupTimers = { A: null, B: null };
-
-function handleExamChange() {
-  document.getElementById('previewCardA').style.display = 'none';
-  document.getElementById('previewCardB').style.display = 'none';
-  if (document.getElementById('rollA').value.trim()) lookupStudent('A');
-  if (document.getElementById('rollB').value.trim()) lookupStudent('B');
-}
-
-// Live student seat lookup (Item 21)
-function lookupStudent(target) {
-  clearTimeout(lookupTimers[target]);
-  const examId = document.getElementById('swapExam').value;
-  const roll = document.getElementById(target === 'A' ? 'rollA' : 'rollB').value.trim();
-  const card = document.getElementById(target === 'A' ? 'previewCardA' : 'previewCardB');
-
-  if (!examId || roll.length < 3) {
-    card.style.display = 'none';
-    return;
+document.addEventListener('DOMContentLoaded', () => {
+  const examSel = document.getElementById('swapExam');
+  if (examSel.value) {
+    handleExamChange();
   }
+});
 
-  lookupTimers[target] = setTimeout(async () => {
-    try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-      const res = await fetch('../api/swap.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ action: 'lookup', exam_id: +examId, roll: roll })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.student) {
-        card.innerHTML = `<span class="text-muted"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>No seat allocated for "${roll}" in this session.</span>`;
-        card.style.display = 'block';
-        return;
-      }
-      const s = json.student;
-      card.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-1">
-          <strong class="text-main">${s.name}</strong>
-          <span class="badge bg-secondary-subtle text-secondary">${s.branch} · Sem ${s.semester}</span>
-        </div>
-        <div class="text-muted">
-          Current: <b>Hall ${s.room_no} (${s.block})</b> · Row ${s.row_num}, Col ${s.col_num} · Desk #${s.bench_no || s.row_num}
-        </div>
-      `;
-      card.style.display = 'block';
-    } catch {
-      card.style.display = 'none';
-    }
-  }, 350);
-}
-
-previewBtn.addEventListener('click', async () => {
+async function handleExamChange() {
   const examId = document.getElementById('swapExam').value;
-  const rollA = document.getElementById('rollA').value.trim();
-  const rollB = document.getElementById('rollB').value.trim();
+  clearSeatSelection();
 
   if (!examId) {
-    window.showToast('Please select an exam first.', 'danger');
-    return;
-  }
-  if (!rollA || !rollB) {
-    window.showToast('Please enter both roll numbers.', 'danger');
-    return;
-  }
-  if (rollA.toUpperCase() === rollB.toUpperCase()) {
-    window.showToast('Roll numbers must be different.', 'danger');
+    document.getElementById('swapMapPlaceholder').style.display = 'block';
+    document.getElementById('swapMapContent').style.display = 'none';
+    document.getElementById('roomTabs').style.display = 'none';
     return;
   }
 
-  previewBtn.disabled = true;
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const res = await fetch('../api/swap.php', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken
-      },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ action: 'get_seating', exam_id: +examId })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to load seating');
+
+    currentRooms = json.rooms || [];
+    currentSeats = json.seats || [];
+
+    if (currentRooms.length === 0 || currentSeats.length === 0) {
+      document.getElementById('swapMapPlaceholder').style.display = 'block';
+      document.getElementById('swapMapPlaceholder').innerHTML = `
+        <div class="empty-state-icon mx-auto mb-3"><?= svg_icon('alert-triangle', '', 28) ?></div>
+        <h6 class="fw-bold text-main">No seating generated yet</h6>
+        <p class="text-muted small mb-0">Generate a seating plan for this exam session first.</p>
+      `;
+      document.getElementById('swapMapContent').style.display = 'none';
+      document.getElementById('roomTabs').style.display = 'none';
+      return;
+    }
+
+    renderRoomTabs();
+    activeRoomId = currentRooms[0].id;
+    renderRoomMap();
+
+    document.getElementById('swapMapPlaceholder').style.display = 'none';
+    document.getElementById('swapMapContent').style.display = 'block';
+  } catch (e) {
+    window.showToast(e.message, 'danger');
+  }
+}
+
+function renderRoomTabs() {
+  const tabsContainer = document.getElementById('roomTabs');
+  if (currentRooms.length <= 1) {
+    tabsContainer.style.display = 'none';
+    return;
+  }
+
+  tabsContainer.style.display = 'flex';
+  tabsContainer.innerHTML = currentRooms.map((r, i) => `
+    <button type="button" class="swap-room-tab ${i === 0 ? 'active' : ''}" onclick="selectRoom(${r.id})">
+      Hall ${r.room_no} (${r.block})
+    </button>
+  `).join('');
+}
+
+function selectRoom(roomId) {
+  activeRoomId = roomId;
+  document.querySelectorAll('.swap-room-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.textContent.includes(`Hall ${currentRooms.find(r => r.id === roomId)?.room_no}`));
+  });
+  renderRoomMap();
+}
+
+function renderRoomMap() {
+  const room = currentRooms.find(r => r.id === activeRoomId) || currentRooms[0];
+  if (!room) return;
+
+  document.getElementById('roomMetaLabel').textContent = `Hall ${room.room_no} · ${room.block} (${room.rows_count} rows × ${room.cols_count} cols)`;
+
+  // Filter seats in this room
+  const roomSeats = currentSeats.filter(s => s.room_id == room.id);
+  const seatGrid = {};
+  roomSeats.forEach(s => {
+    seatGrid[`${s.row_num}:${s.col_num}`] = s;
+  });
+
+  const gridContainer = document.getElementById('swapGrid');
+  let html = '';
+
+  for (let r = 1; r <= room.rows_count; r++) {
+    html += `<div class="swap-bench-row">
+      <span class="swap-bench-label">R${r}</span>`;
+
+    for (let c = 1; c <= room.cols_count; c++) {
+      const s = seatGrid[`${r}:${c}`];
+      if (s) {
+        const isA = selectedSeatA && selectedSeatA.id === s.id;
+        const isB = selectedSeatB && selectedSeatB.id === s.id;
+        const isClash = conflictingSeatKeys.has(`${room.id}:${r}:${c}`) || (isA && conflictingSeatKeys.has(`clash_a`)) || (isB && conflictingSeatKeys.has(`clash_b`));
+
+        let cls = 'swap-seat-btn';
+        if (isA) cls += ' seat-selected-a';
+        else if (isB) cls += ' seat-selected-b';
+        if (isClash) cls += ' seat-clash';
+
+        const rollShort = s.roll_no ? s.roll_no.slice(-4) : '—';
+        html += `<button type="button" class="${cls}" data-seat-id="${s.id}" onclick="handleSeatClick(${s.id})" title="${s.name || ''} (${s.roll_no}) · Paper ${s.exam_code} · Row ${r}, Col ${c}">
+          <div class="swap-seat-roll">${s.roll_no}</div>
+          <div class="swap-seat-code">${s.exam_code}</div>
+        </button>`;
+      } else {
+        html += `<div class="swap-seat-btn" style="opacity:0.4; cursor:default; border-style:dashed;">
+          <span class="text-muted small">—</span>
+        </div>`;
+      }
+    }
+
+    html += `</div>`;
+  }
+
+  gridContainer.innerHTML = html;
+}
+
+function handleSeatClick(seatId) {
+  const seat = currentSeats.find(s => s.id === seatId);
+  if (!seat) return;
+
+  if (!selectedSeatA) {
+    selectedSeatA = seat;
+  } else if (selectedSeatA.id === seat.id) {
+    selectedSeatA = null;
+  } else if (!selectedSeatB) {
+    selectedSeatB = seat;
+    triggerClashCheck();
+  } else if (selectedSeatB.id === seat.id) {
+    selectedSeatB = null;
+    clearClashWarnings();
+  } else {
+    // Replace B with new selection
+    selectedSeatB = seat;
+    triggerClashCheck();
+  }
+
+  updateSelectionCards();
+  renderRoomMap();
+}
+
+function updateSelectionCards() {
+  const cardA = document.getElementById('seatCardA');
+  const cardB = document.getElementById('seatCardB');
+  const btn = document.getElementById('executeSwapBtn');
+
+  if (selectedSeatA) {
+    const room = currentRooms.find(r => r.id == selectedSeatA.room_id);
+    document.getElementById('seatARoll').textContent = selectedSeatA.roll_no;
+    document.getElementById('seatAName').textContent = selectedSeatA.name || 'Candidate 1';
+    document.getElementById('seatAMeta').textContent = `Hall ${room ? room.room_no : selectedSeatA.room_id} · Row ${selectedSeatA.row_num}, Col ${selectedSeatA.col_num} · ${selectedSeatA.exam_code}`;
+    cardA.style.borderColor = '#E27A55';
+    cardA.style.background = 'rgba(255, 189, 163, 0.15)';
+  } else {
+    document.getElementById('seatARoll').textContent = '—';
+    document.getElementById('seatAName').textContent = 'Click a seat on the map';
+    document.getElementById('seatAMeta').textContent = '—';
+    cardA.style.borderColor = 'var(--border, #D8CFBF)';
+    cardA.style.background = '#FAF8F5';
+  }
+
+  if (selectedSeatB) {
+    const room = currentRooms.find(r => r.id == selectedSeatB.room_id);
+    document.getElementById('seatBRoll').textContent = selectedSeatB.roll_no;
+    document.getElementById('seatBName').textContent = selectedSeatB.name || 'Candidate 2';
+    document.getElementById('seatBMeta').textContent = `Hall ${room ? room.room_no : selectedSeatB.room_id} · Row ${selectedSeatB.row_num}, Col ${selectedSeatB.col_num} · ${selectedSeatB.exam_code}`;
+    cardB.style.borderColor = '#58693F';
+    cardB.style.background = 'rgba(139, 154, 110, 0.15)';
+  } else {
+    document.getElementById('seatBRoll').textContent = '—';
+    document.getElementById('seatBName').textContent = 'Click second seat to swap';
+    document.getElementById('seatBMeta').textContent = '—';
+    cardB.style.borderColor = 'var(--border, #D8CFBF)';
+    cardB.style.background = '#FAF8F5';
+  }
+
+  btn.disabled = !(selectedSeatA && selectedSeatB);
+}
+
+async function triggerClashCheck() {
+  if (!selectedSeatA || !selectedSeatB) return;
+
+  const examId = document.getElementById('swapExam').value;
+  const statusBox = document.getElementById('clashStatusBox');
+  const forceWrapper = document.getElementById('forceWrapper');
+  conflictingSeatKeys.clear();
+
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const res = await fetch('../api/swap.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
       body: JSON.stringify({
         exam_id: +examId,
-        roll_a: rollA,
-        roll_b: rollB,
+        roll_a: selectedSeatA.roll_no,
+        roll_b: selectedSeatB.roll_no,
         check_only: true
       })
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to inspect seats');
-    currentSwapData = json;
-    renderSwapPreview(json);
+    currentClashes = json.clashes || [];
+
+    if (json.has_clash && currentClashes.length > 0) {
+      // Mark clashing seat keys
+      if (json.conflicting_seats) {
+        json.conflicting_seats.forEach(cs => {
+          conflictingSeatKeys.add(`${cs.room_id}:${cs.row}:${cs.col}`);
+        });
+      }
+      statusBox.innerHTML = `
+        <div class="p-2.5 rounded-3 border small" style="background:rgba(156,70,50,0.12); border-color:#9C4632; color:#9C4632;">
+          <b>${currentClashes.length} clash(es) detected!</b>
+          <div class="mt-1" style="font-size:0.75rem;">${currentClashes[0]}</div>
+        </div>
+      `;
+      statusBox.style.display = 'block';
+      forceWrapper.style.display = 'block';
+    } else {
+      statusBox.innerHTML = `
+        <div class="p-2.5 rounded-3 border small" style="background:rgba(139,154,110,0.18); border-color:#8B9A6E; color:#3F4B2D;">
+          <b>0 clashes.</b> Safe to swap.
+        </div>
+      `;
+      statusBox.style.display = 'block';
+      forceWrapper.style.display = 'none';
+    }
   } catch (e) {
-    window.showToast(e.message, 'danger');
-  } finally {
-    previewBtn.disabled = false;
+    statusBox.style.display = 'none';
+    forceWrapper.style.display = 'none';
   }
-});
 
-function renderSwapPreview(data) {
-  document.getElementById('swapPlaceholder').style.display = 'none';
-  document.getElementById('swapPanel').style.display = 'block';
-
-  const a = data.student_a;
-  const b = data.student_b;
-
-  document.getElementById('aRoll').textContent = a.roll_no;
-  document.getElementById('aName').textContent = a.name;
-  document.getElementById('aBranch').textContent = `${a.branch} · Sem ${a.semester}`;
-  document.getElementById('aCode').textContent = a.exam_code;
-  document.getElementById('aCurRoom').textContent = `${a.room_no} (${a.block})`;
-  document.getElementById('aCurRow').textContent = a.row_num;
-  document.getElementById('aCurCol').textContent = a.col_num;
-  document.getElementById('aNewRoom').textContent = `${b.room_no} (${b.block})`;
-  document.getElementById('aNewRow').textContent = b.row_num;
-  document.getElementById('aNewCol').textContent = b.col_num;
-
-  document.getElementById('bRoll').textContent = b.roll_no;
-  document.getElementById('bName').textContent = b.name;
-  document.getElementById('bBranch').textContent = `${b.branch} · Sem ${b.semester}`;
-  document.getElementById('bCode').textContent = b.exam_code;
-  document.getElementById('bCurRoom').textContent = `${b.room_no} (${b.block})`;
-  document.getElementById('bCurRow').textContent = b.row_num;
-  document.getElementById('bCurCol').textContent = b.col_num;
-  document.getElementById('bNewRoom').textContent = `${a.room_no} (${a.block})`;
-  document.getElementById('bNewRow').textContent = a.row_num;
-  document.getElementById('bNewCol').textContent = a.col_num;
-
-  const badge = document.getElementById('swapBadge');
-  const warnDiv = document.getElementById('swapWarnings');
-  const forceCheck = document.getElementById('forceCheckWrapper');
-  const forceInput = document.getElementById('forceSwapCheck');
-
-  forceInput.checked = false;
-
-  // Clear verdict banner (Item 22)
-  if (data.has_clash) {
-    badge.className = 'status-pill status-cancelled';
-    badge.innerHTML = '<span class="status-dot"></span>Clash Detected';
-    forceCheck.style.display = 'block';
-    confirmSwapBtn.disabled = true;
-
-    let html = `<div class="alert alert-danger py-2.5 px-3 rounded-3 small">
-      <div class="d-flex align-items-center gap-1.5 fw-bold text-danger mb-1">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Conflict Warning
-      </div>
-      <div>Swapping these seats will introduce ${data.clashes.length} adjacent conflict(s):</div>
-      <ul class="mb-0 mt-1 ps-3">`;
-    data.clashes.forEach(c => {
-      html += `<li>${c}</li>`;
-    });
-    html += `</ul></div>`;
-    warnDiv.innerHTML = html;
-  } else {
-    badge.className = 'status-pill status-ongoing';
-    badge.innerHTML = '<span class="status-dot"></span>Conflict-Free Swap';
-    forceCheck.style.display = 'none';
-    confirmSwapBtn.disabled = false;
-    warnDiv.innerHTML = `<div class="alert alert-primary py-2.5 px-3 rounded-3 small d-flex align-items-center gap-2">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      <div><b>Zero Conflicts Found!</b> Both desks can be safely exchanged without creating adjacent same-exam-code clashes.</div>
-    </div>`;
-  }
+  renderRoomMap();
 }
 
-function handleForceCheckChange() {
-  const force = document.getElementById('forceSwapCheck').checked;
-  confirmSwapBtn.disabled = !force;
+function clearClashWarnings() {
+  document.getElementById('clashStatusBox').style.display = 'none';
+  document.getElementById('forceWrapper').style.display = 'none';
+  conflictingSeatKeys.clear();
+  currentClashes = [];
 }
 
-confirmSwapBtn.addEventListener('click', async () => {
-  if (!currentSwapData) return;
+function clearSeatSelection() {
+  selectedSeatA = null;
+  selectedSeatB = null;
+  clearClashWarnings();
+  updateSelectionCards();
+  renderRoomMap();
+}
+
+async function executeSwap() {
+  if (!selectedSeatA || !selectedSeatB) return;
 
   const examId = document.getElementById('swapExam').value;
-  const examSel = document.getElementById('swapExam');
-  const examName = examSel.options[examSel.selectedIndex]?.text || 'Exam';
-  const rollA = document.getElementById('rollA').value.trim();
-  const rollB = document.getElementById('rollB').value.trim();
-  const force = document.getElementById('forceSwapCheck').checked;
+  const isForce = document.getElementById('forceSwapCheck')?.checked || false;
 
-  if (currentSwapData.has_clash && !force) {
-    window.showToast('Please check the confirmation box to force a swap with conflicts.', 'warning');
+  if (currentClashes.length > 0 && !isForce) {
+    window.showToast('Please check the conflict confirmation box before swapping.', 'danger');
     return;
   }
 
-  confirmSwapBtn.disabled = true;
+  const btn = document.getElementById('executeSwapBtn');
+  btn.disabled = true;
+  btn.textContent = 'Swapping…';
+
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const res = await fetch('../api/swap.php', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken
-      },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
       body: JSON.stringify({
         exam_id: +examId,
-        roll_a: rollA,
-        roll_b: rollB,
-        force: force
+        roll_a: selectedSeatA.roll_no,
+        roll_b: selectedSeatB.roll_no,
+        force: isForce
       })
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || json.message || 'Swap failed');
 
-    // Update both student preview cards in place (Item 23)
-    lookupStudent('A');
-    lookupStudent('B');
+    // Exchange seat coordinates in memory
+    const tempRoom = selectedSeatA.room_id;
+    const tempRow = selectedSeatA.row_num;
+    const tempCol = selectedSeatA.col_num;
+    const tempBench = selectedSeatA.bench_no;
+    const tempIdx = selectedSeatA.seat_index;
 
-    // Add to Recent Swaps Audit Log (Item 24)
-    recordRecentSwap({
-      exam: examName,
-      rollA: rollA,
-      rollB: rollB,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      date: new Date().toLocaleDateString([], { day: 'numeric', month: 'short' }),
-    });
+    selectedSeatA.room_id = selectedSeatB.room_id;
+    selectedSeatA.row_num = selectedSeatB.row_num;
+    selectedSeatA.col_num = selectedSeatB.col_num;
+    selectedSeatA.bench_no = selectedSeatB.bench_no;
+    selectedSeatA.seat_index = selectedSeatB.seat_index;
 
-    window.showToast(json.message || 'Seats swapped successfully!', 'success');
-    resetSwap();
+    selectedSeatB.room_id = tempRoom;
+    selectedSeatB.row_num = tempRow;
+    selectedSeatB.col_num = tempCol;
+    selectedSeatB.bench_no = tempBench;
+    selectedSeatB.seat_index = tempIdx;
+
+    window.showToast('Seats swapped', 'success');
+    clearSeatSelection();
   } catch (e) {
     window.showToast(e.message, 'danger');
   } finally {
-    confirmSwapBtn.disabled = false;
+    btn.disabled = false;
+    btn.textContent = 'Swap seats';
   }
-});
-
-function resetSwap() {
-  currentSwapData = null;
-  document.getElementById('swapPanel').style.display = 'none';
-  document.getElementById('swapPlaceholder').style.display = 'block';
 }
 
-function recordRecentSwap(entry) {
-  try {
-    const list = JSON.parse(localStorage.getItem(RECENT_SWAPS_KEY)) || [];
-    list.unshift(entry);
-    localStorage.setItem(RECENT_SWAPS_KEY, JSON.stringify(list.slice(0, 10)));
-    renderRecentSwaps();
-  } catch {}
+function findAndSelectByRoll() {
+  const roll = document.getElementById('rollSearchInput').value.trim().toUpperCase();
+  if (!roll) return;
+
+  const seat = currentSeats.find(s => s.roll_no && s.roll_no.toUpperCase() === roll);
+  if (!seat) {
+    window.showToast(`Roll number "${roll}" not found in this exam session.`, 'danger');
+    return;
+  }
+
+  if (activeRoomId !== seat.room_id) {
+    selectRoom(seat.room_id);
+  }
+
+  handleSeatClick(seat.id);
+  window.showToast(`Selected seat for ${roll}`, 'info');
 }
-
-function clearRecentSwaps() {
-  localStorage.removeItem(RECENT_SWAPS_KEY);
-  renderRecentSwaps();
-}
-
-function renderRecentSwaps() {
-  try {
-    const list = JSON.parse(localStorage.getItem(RECENT_SWAPS_KEY)) || [];
-    const container = document.getElementById('recentSwapsList');
-    const emptyMsg = document.getElementById('noRecentSwapsMsg');
-
-    if (!list.length) {
-      emptyMsg.style.display = 'block';
-      container.style.display = 'none';
-      return;
-    }
-
-    emptyMsg.style.display = 'none';
-    container.style.display = 'flex';
-    container.innerHTML = list.map(item => `
-      <div class="d-flex justify-content-between align-items-center p-2 px-3 rounded-2 bg-light border small">
-        <div class="d-flex align-items-center gap-2">
-          <span class="badge bg-primary-subtle text-primary fw-bold font-monospace">${item.rollA}</span>
-          <span class="text-muted">⇄</span>
-          <span class="badge bg-secondary-subtle text-secondary fw-bold font-monospace">${item.rollB}</span>
-          <span class="text-muted ms-1">(${item.exam})</span>
-        </div>
-        <span class="text-muted small">${item.date} · ${item.time}</span>
-      </div>
-    `).join('');
-  } catch {}
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  renderRecentSwaps();
-});
 </script>
 
 <?php require __DIR__ . '/_footer.php'; ?>

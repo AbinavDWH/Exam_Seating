@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("DELETE FROM seating WHERE student_id = ?")->execute([$id]);
             $pdo->prepare("DELETE FROM students WHERE id = ?")->execute([$id]);
         }
-        header('Location: students.php?toast=' . urlencode('Student record deleted successfully'));
+        header('Location: students.php?toast=' . urlencode('Student deleted'));
         exit;
     } else {
         $roll = strtoupper(trim((string)($_POST['roll_no'] ?? '')));
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        header('Location: students.php?toast=' . urlencode('Student record saved successfully'));
+        header('Location: students.php?toast=' . urlencode('Student saved'));
         exit;
     }
 }
@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Students';
 require __DIR__ . '/_header.php';
 
+$perPage = max(10, min(100, (int)($_GET['per_page'] ?? 25)));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 50;
 $offset = ($page - 1) * $perPage;
 
 $q = trim($_GET['q'] ?? '');
@@ -111,7 +111,7 @@ $countStmt = $pdo->prepare("SELECT COUNT(*) FROM students s WHERE 1" .
     ($code !== '' ? " AND s.exam_code = ?" : ""));
 $countStmt->execute($params);
 $totalStudents = (int)$countStmt->fetchColumn();
-$totalPages = ceil($totalStudents / $perPage);
+$totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
 $stmt = $pdo->prepare("$sql ORDER BY s.semester, s.branch, s.roll_no LIMIT $perPage OFFSET $offset");
 $stmt->execute($params);
@@ -152,9 +152,9 @@ $deptBadgeClass = [
   </div>
   <div class="d-flex gap-2">
     <div class="stat-pill px-3 py-2 text-start" style="min-width: 170px;">
-      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Enrolled Students</span>
-      <b style="font-size: 1.25rem; color: #0f172a; margin-top: 2px;"><?= number_format($totalStudents) ?></b>
-      <span class="text-muted small" style="font-size: 0.76rem;">Active Roster</span>
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Enrolled students</span>
+      <b style="font-size: 1.25rem; color: #2B2E27; margin-top: 2px;"><?= number_format($totalStudents) ?></b>
+      <span class="text-muted small" style="font-size: 0.76rem;">active roster</span>
     </div>
   </div>
 </div>
@@ -333,37 +333,40 @@ $deptBadgeClass = [
   <div class="col-lg-8">
     <div class="table-card">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0">Registered Student Roster</h6>
+        <h6 class="fw-bold mb-0">Registered students</h6>
         <span class="text-muted small">
-          Page <?= $page ?> of <?= max(1, $totalPages) ?> (<?= number_format($totalStudents) ?> total)
+          Showing <?= number_format($totalStudents > 0 ? $offset + 1 : 0) ?>–<?= number_format(min($totalStudents, $offset + $perPage)) ?> of <?= number_format($totalStudents) ?>
         </span>
       </div>
 
-      <!-- Single Toolbar Row (Point 28) -->
+      <!-- Single Toolbar Row -->
       <form class="table-toolbar-row" method="get">
         <div class="toolbar-search">
           <input name="q" value="<?= htmlspecialchars($q) ?>" class="form-control" placeholder="Search roll no or name…">
         </div>
         <div class="toolbar-filters">
-          <select name="branch" class="form-select" style="min-width: 140px;">
-            <option value="">All Departments</option>
+          <select name="branch" class="form-select" style="min-width: 130px;">
+            <option value="">All departments</option>
             <?php foreach ($branches as $b): ?>
               <option value="<?= htmlspecialchars($b) ?>" <?= $b===$branch?'selected':'' ?>><?= htmlspecialchars($b) ?></option>
             <?php endforeach; ?>
           </select>
-          <select name="sem" class="form-select" style="min-width: 110px;">
-            <option value="">All Sem</option>
+          <select name="sem" class="form-select" style="min-width: 100px;">
+            <option value="">All sem</option>
             <?php foreach ($semesters as $s): ?>
               <option value="<?= (int)$s ?>" <?= $sem===(int)$s?'selected':'' ?>>Sem <?= (int)$s ?></option>
             <?php endforeach; ?>
           </select>
+          <select name="per_page" class="form-select" style="min-width: 90px;" onchange="this.form.submit()">
+            <option value="10" <?= $perPage === 10 ? 'selected' : '' ?>>10 / page</option>
+            <option value="25" <?= $perPage === 25 ? 'selected' : '' ?>>25 / page</option>
+            <option value="50" <?= $perPage === 50 ? 'selected' : '' ?>>50 / page</option>
+            <option value="100" <?= $perPage === 100 ? 'selected' : '' ?>>100 / page</option>
+          </select>
           <button class="btn btn-grad py-1 px-3" style="height: 44px;">Filter</button>
-          <?php if ($q !== '' || $branch !== '' || $sem !== null): ?>
+          <?php if ($q !== '' || $branch !== '' || $sem !== null || $perPage !== 25): ?>
             <a href="students.php" class="btn btn-outline-secondary py-1 px-3 d-inline-flex align-items-center" style="height: 44px;">Reset</a>
           <?php endif; ?>
-        </div>
-        <div class="toolbar-count-badge ms-auto">
-          <?= number_format($totalStudents) ?> Student(s)
         </div>
       </form>
 
@@ -394,7 +397,6 @@ $deptBadgeClass = [
                 </span>
               </td>
               <td>
-                <!-- Soft colored department badge matching student map (Point 31) -->
                 <span class="badge <?= $deptBadgeClass[$s['branch']] ?? 'bg-secondary-subtle text-secondary' ?> px-2 py-1">
                   <?= htmlspecialchars($s['branch']) ?>
                 </span>
@@ -403,13 +405,9 @@ $deptBadgeClass = [
                 Sem <?= (int)$s['semester'] ?> <span class="small">(Yr <?= ceil($s['semester'] / 2) ?>)</span>
               </td>
               <td class="text-end">
-                <!-- Icon Action Buttons with Tooltips (Point 30) -->
                 <button type="button" class="btn-action btn-action-delete"
-                        title="Delete Student"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteStudentModal"
-                        data-id="<?= $s['id'] ?>"
-                        data-name="<?= htmlspecialchars($s['roll_no'] . ' - ' . $s['name'], ENT_QUOTES) ?>">
+                        title="Delete student"
+                        onclick="openDeleteStudentModal(<?= $s['id'] ?>, '<?= htmlspecialchars($s['roll_no'], ENT_QUOTES) ?>', '<?= htmlspecialchars($s['name'], ENT_QUOTES) ?>')">
                   <?= svg_icon('trash', '', 15) ?>
                 </button>
               </td>
@@ -426,73 +424,63 @@ $deptBadgeClass = [
         </table>
       </div>
 
-      <!-- Pagination Component (Point 29) -->
-      <?php if ($totalPages > 1): ?>
-        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-          <span class="small text-muted">
-            Showing <?= number_format($offset + 1) ?>–<?= number_format(min($totalStudents, $offset + $perPage)) ?> of <?= number_format($totalStudents) ?>
-          </span>
+      <!-- Pagination Component -->
+      <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+        <span class="small text-muted">
+          Showing <?= number_format($totalStudents > 0 ? $offset + 1 : 0) ?>–<?= number_format(min($totalStudents, $offset + $perPage)) ?> of <?= number_format($totalStudents) ?>
+        </span>
+        <?php if ($totalPages > 1): ?>
           <nav>
             <ul class="pagination pagination-sm mb-0">
               <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $page - 1 ?>&q=<?= urlencode($q) ?>&branch=<?= urlencode($branch) ?>&sem=<?= urlencode($sem ?? '') ?>">Prev</a>
+                <a class="page-link" href="?page=<?= $page - 1 ?>&per_page=<?= $perPage ?>&q=<?= urlencode($q) ?>&branch=<?= urlencode($branch) ?>&sem=<?= urlencode($sem ?? '') ?>">Prev</a>
               </li>
               <li class="page-item active">
                 <span class="page-link"><?= $page ?> / <?= $totalPages ?></span>
               </li>
               <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $page + 1 ?>&q=<?= urlencode($q) ?>&branch=<?= urlencode($branch) ?>&sem=<?= urlencode($sem ?? '') ?>">Next</a>
+                <a class="page-link" href="?page=<?= $page + 1 ?>&per_page=<?= $perPage ?>&q=<?= urlencode($q) ?>&branch=<?= urlencode($branch) ?>&sem=<?= urlencode($sem ?? '') ?>">Next</a>
               </li>
             </ul>
           </nav>
-        </div>
-      <?php endif; ?>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Modal: Delete Confirmation Popup -->
-<div class="modal fade" id="deleteStudentModal" tabindex="-1" aria-labelledby="deleteStudentModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2" id="deleteStudentModalLabel">
-          <?= svg_icon('alert-triangle', '', 20) ?>
-          Delete Student
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" action="students.php">
-        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="id" id="deleteStudentId" value="">
-        <div class="modal-body py-3">
-          <p class="text-body mb-2">Are you sure you want to delete <strong id="deleteStudentName">this student</strong>?</p>
-          <div class="p-3 bg-danger-subtle rounded-3 text-danger small">
-            <?= svg_icon('alert-triangle', 'me-1', 15) ?>
-            This action will delete the student and their associated seating records.
-          </div>
-        </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger px-3">Yes, Delete</button>
-        </div>
-      </form>
+<!-- DeskMap Delete Confirmation Dialog -->
+<div id="deleteStudentModal" class="deskmap-modal-backdrop" style="display:none;">
+  <div class="deskmap-modal-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold m-0" style="color:var(--brand-red, #9C4632);">Delete student</h5>
+      <button type="button" class="btn-close" onclick="closeDeleteStudentModal()" aria-label="Close"></button>
     </div>
+    <form method="post" action="students.php">
+      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="id" id="deleteStudentId" value="">
+      <p id="deleteStudentMessage" class="text-body mb-3">Deleting this student removes their record and exam seating.</p>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary px-3" onclick="closeDeleteStudentModal()">Cancel</button>
+        <button type="submit" class="btn btn-danger px-3">Delete student</button>
+      </div>
+    </form>
   </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const deleteModal = document.getElementById('deleteStudentModal');
-  if (deleteModal) {
-    deleteModal.addEventListener('show.bs.modal', (event) => {
-      const btn = event.relatedTarget;
-      document.getElementById('deleteStudentId').value = btn.getAttribute('data-id');
-      document.getElementById('deleteStudentName').textContent = `"${btn.getAttribute('data-name')}"`;
-    });
-  }
+function openDeleteStudentModal(id, roll, name) {
+  document.getElementById('deleteStudentId').value = id;
+  document.getElementById('deleteStudentMessage').innerHTML = `<strong>Deleting ${roll} (${name}) un-seats them from their active examinations and removes their record.</strong>`;
+  document.getElementById('deleteStudentModal').style.display = 'flex';
+}
 
+function closeDeleteStudentModal() {
+  document.getElementById('deleteStudentModal').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
   // Setup Drag and Drop
   const dropZone = document.getElementById('csvDropZone');
   const fileInput = document.getElementById('csvFile');

@@ -12,6 +12,35 @@ $rollB    = strtoupper(trim($in['roll_b'] ?? ''));
 $checkOnly = !empty($in['check_only']);
 $force    = !empty($in['force']);
 
+// Support getting all seating layout for an exam
+if (($in['action'] ?? '') === 'get_seating') {
+    if (!$examId) {
+        json_response(['error' => 'exam_id is required'], 400);
+    }
+    $roomsStmt = db()->prepare("
+        SELECT DISTINCT r.id, r.room_no, r.block, r.rows_count, r.cols_count, r.capacity
+        FROM seating se
+        JOIN rooms r ON r.id = se.room_id
+        WHERE se.exam_id = ?
+        ORDER BY r.block, CAST(r.room_no AS INTEGER), r.room_no
+    ");
+    $roomsStmt->execute([$examId]);
+    $roomsList = $roomsStmt->fetchAll();
+
+    $seatsStmt = db()->prepare("
+        SELECT se.id, se.room_id, se.roll_no, se.row_num, se.col_num, se.bench_no, se.seat_index,
+               s.name, s.branch, s.semester, COALESCE(se.exam_code, s.exam_code) AS exam_code
+        FROM seating se
+        LEFT JOIN students s ON s.roll_no = se.roll_no
+        WHERE se.exam_id = ?
+        ORDER BY se.room_id, se.row_num, se.col_num
+    ");
+    $seatsStmt->execute([$examId]);
+    $seatsList = $seatsStmt->fetchAll();
+
+    json_response(['success' => true, 'rooms' => $roomsList, 'seats' => $seatsList]);
+}
+
 // Support live instant student seat lookup (Item 21)
 if (($in['action'] ?? '') === 'lookup') {
     $roll = strtoupper(trim($in['roll'] ?? ''));
@@ -113,6 +142,7 @@ foreach ($allRoomSeats as $rs) {
 // Check adjacent horizontal and vertical neighbors for clashes
 $orthoOffsets = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 $clashes = [];
+$conflictingSeats = [];
 
 // Check A at B's position
 $targetKeyA = "{$b['room_id']}:{$b['row_num']}:{$b['col_num']}";
@@ -124,6 +154,8 @@ foreach ($orthoOffsets as [$dr, $dc]) {
         $n = $grid[$nKey];
         if ($n['exam_code'] === $a['exam_code']) {
             $clashes[] = "Placing {$a['roll_no']} ({$a['exam_code']}) at Hall {$b['room_no']} (Row {$b['row_num']}, Col {$b['col_num']}) clashes with adjacent student {$n['roll_no']} ({$n['exam_code']}) at Row {$nr}, Col {$nc}.";
+            $conflictingSeats[] = ['room_id' => (int)$b['room_id'], 'row' => $nr, 'col' => $nc, 'roll' => $n['roll_no']];
+            $conflictingSeats[] = ['room_id' => (int)$b['room_id'], 'row' => (int)$b['row_num'], 'col' => (int)$b['col_num'], 'roll' => $rollA];
         }
     }
 }
@@ -138,6 +170,8 @@ foreach ($orthoOffsets as [$dr, $dc]) {
         $n = $grid[$nKey];
         if ($n['exam_code'] === $b['exam_code']) {
             $clashes[] = "Placing {$b['roll_no']} ({$b['exam_code']}) at Hall {$a['room_no']} (Row {$a['row_num']}, Col {$a['col_num']}) clashes with adjacent student {$n['roll_no']} ({$n['exam_code']}) at Row {$nr}, Col {$nc}.";
+            $conflictingSeats[] = ['room_id' => (int)$a['room_id'], 'row' => $nr, 'col' => $nc, 'roll' => $n['roll_no']];
+            $conflictingSeats[] = ['room_id' => (int)$a['room_id'], 'row' => (int)$a['row_num'], 'col' => (int)$a['col_num'], 'roll' => $rollB];
         }
     }
 }
@@ -146,23 +180,25 @@ $clashes = array_values(array_unique($clashes));
 
 if ($checkOnly) {
     json_response([
-        'success'   => true,
-        'student_a' => $a,
-        'student_b' => $b,
-        'has_clash' => count($clashes) > 0,
-        'clashes'   => $clashes,
+        'success'           => true,
+        'student_a'         => $a,
+        'student_b'         => $b,
+        'has_clash'         => count($clashes) > 0,
+        'clashes'           => $clashes,
+        'conflicting_seats' => $conflictingSeats,
     ]);
 }
 
 if (!empty($clashes) && !$force) {
     json_response([
-        'success'   => false,
-        'warning'   => true,
-        'has_clash' => true,
-        'clashes'   => $clashes,
-        'student_a' => $a,
-        'student_b' => $b,
-        'message'   => "Warning: This swap creates " . count($clashes) . " adjacent same-paper conflict(s). Set force=true to proceed anyway."
+        'success'           => false,
+        'warning'           => true,
+        'has_clash'         => true,
+        'clashes'           => $clashes,
+        'conflicting_seats' => $conflictingSeats,
+        'student_a'         => $a,
+        'student_b'         => $b,
+        'message'           => "Warning: This swap creates " . count($clashes) . " adjacent same-paper conflict(s). Set force=true to proceed anyway."
     ], 409);
 }
 

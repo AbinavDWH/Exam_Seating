@@ -23,7 +23,7 @@ export default function RoomView() {
   if (error) {
     return (
       <div className="container" style={{ padding: '60px 0' }}>
-        <div className="state-box card-enter">
+        <div className="state-box">
           <div className="state-box-icon error">
             <AlertCircle size={26} />
           </div>

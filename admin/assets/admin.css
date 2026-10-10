@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import './fonts.css';
 
 :root {
   --admin-bg: #EAE2D6;
@@ -25,6 +25,9 @@
   --info: #5E7A99;
   --warning: #C99A2E;
   --danger: #9C4632;
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 *, *::before, *::after {
@@ -1005,6 +1008,46 @@ a.btn:focus, .btn:focus, .btn-grad:focus {
   padding: 16px 24px;
 }
 
+/* ── DeskMap Modal Dialog ─────────────────────────── */
+.deskmap-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 46, 39, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.deskmap-modal-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border, #D8CFBF);
+  border-radius: var(--radius-card, 8px);
+  width: 100%;
+  max-width: 480px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 32px rgba(43, 46, 39, 0.12);
+  position: relative;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted, #6E7068);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.btn-close::before {
+  content: "×";
+  font-size: 1.5rem;
+  display: block;
+}
+
 /* ── Brand Checkbox and Radio Controls (Points 11, 25) ───── */
 .form-check-input {
   width: 1.15em;
@@ -1471,3 +1514,474 @@ a.btn:focus, .btn:focus, .btn-grad:focus {
 .text-nowrap {
   white-space: nowrap;
 }
+/* ── Typography Scale & Titles ─────────────────────── */
+.page-title {
+  font-family: var(--font-serif) !important;
+  font-size: 1.85rem !important;
+  font-weight: 400 !important;
+  color: var(--text-main) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ── Sticky Tables & Pagination Bar ────────────────── */
+.table-responsive {
+  max-height: 65vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  background: var(--table-th-bg, #DFD6C8) !important;
+  z-index: 5 !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+
+.table-pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: #FFFFFF;
+  border-radius: 0 0 12px 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.row-count-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ── Off-Canvas Side Panel (New Exam Drawer) ───────── */
+.side-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 46, 39, 0.4);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.side-panel-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(540px, 100vw);
+  height: 100vh;
+  background: #FFFFFF;
+  border-left: 1px solid var(--border);
+  z-index: 999;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 20px rgba(43, 46, 39, 0.1);
+}
+
+.side-panel.open {
+  transform: translateX(0);
+}
+
+.side-panel-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #FAF7F2;
+}
+
+.side-panel-title {
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+.side-panel-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.side-panel-close:hover {
+  background: var(--bg);
+  color: var(--text-main);
+}
+
+.side-panel-body {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Full width inputs */
+.side-panel .form-control,
+.side-panel .form-select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.side-panel .form-control:focus,
+.side-panel .form-select:focus {
+  border-color: var(--text-main);
+  outline: 2px solid var(--text-main);
+  outline-offset: 1px;
+}
+
+/* ── Workflow Sequence (Dashboard) ─────────────────── */
+.workflow-sequence-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.workflow-sequence-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.workflow-sequence-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.workflow-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .workflow-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 540px) {
+  .workflow-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workflow-step-card {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #FAF7F2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+  text-decoration: none !important;
+  color: inherit;
+}
+
+.workflow-step-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--text-main);
+}
+
+.workflow-step-card.completed {
+  background: var(--sage-bg, #EEF2E6);
+  border-color: var(--sage-border, #C8D4B4);
+}
+
+.step-num-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.workflow-step-card.completed .step-num-badge {
+  color: var(--brand-sage);
+}
+
+.step-title-text {
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-status-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Interactive Seat Swap Map ─────────────────────── */
+.swap-interactive-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.swap-room-map-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #FFFFFF;
+  overflow-x: auto;
+  max-height: 520px;
+}
+
+.swap-desk-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #FAF7F2;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px;
+  transition: all 0.15s ease;
+}
+
+.swap-desk-btn:hover {
+  border-color: var(--text-main);
+  background: #F3EAE0;
+}
+
+.swap-desk-btn.selected-a {
+  background: var(--primary) !important;
+  border: 2px solid var(--text-main) !important;
+  color: var(--primary-text) !important;
+  box-shadow: 0 0 0 2px var(--text-main);
+}
+
+.swap-desk-btn.selected-b {
+  background: var(--brand-sage) !important;
+  border: 2px solid var(--text-main) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 0 0 2px var(--text-main);
+}
+
+.swap-desk-btn.clash-highlight {
+  background: #F9ECE8 !important;
+  border: 2px solid #9C4632 !important;
+  color: #7D3020 !important;
+  animation: clashPulse 1s infinite alternate;
+}
+
+@keyframes clashPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(156, 70, 50, 0.4); }
+  100% { transform: scale(1.06); box-shadow: 0 0 0 4px rgba(156, 70, 50, 0.6); }
+}
+
+/* ── Inline Spacing & Minimaps ─────────────────────── */
+.minimap-hall-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.hall-minimap-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #FFFFFF;
+  padding: 16px;
+}
+
+.minimap-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.minimap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.minimap-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.minimap-seat-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  border: 1px solid #D8CFBF;
+  font-size: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.minimap-seat-box.occupied {
+  background: var(--brand-sage);
+  border-color: #65754C;
+  color: #FFFFFF;
+}
+
+.minimap-seat-box.empty {
+  background: #FAF7F2;
+  border-style: dashed;
+}
+
+/* ── Interactive Seat Swap Map ────────────────────────── */
+.swap-room-container {
+  background: #FFFFFF;
+  border: 1px solid var(--border, #D8CFBF);
+  border-radius: var(--radius-card, 8px);
+  padding: 1.25rem;
+}
+
+.swap-room-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border, #D8CFBF);
+}
+
+.swap-room-tab {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #D8CFBF);
+  background: #FAF8F5;
+  color: var(--ink-text, #2B2E27);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.swap-room-tab.active {
+  background: var(--ink-text, #2B2E27);
+  color: #FFFFFF;
+  border-color: var(--ink-text, #2B2E27);
+}
+
+.swap-bench-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.swap-bench-label {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.72rem;
+  color: #8C8477;
+  display: flex;
+  align-items: center;
+  min-width: 24px;
+}
+
+.swap-seat-btn {
+  width: 76px;
+  min-height: 52px;
+  background: #FAF8F5;
+  border: 1px solid var(--border, #D8CFBF);
+  border-radius: 6px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  text-align: center;
+}
+
+.swap-seat-btn:hover {
+  border-color: #A89F91;
+  background: #F2ECE1;
+  transform: translateY(-1px);
+}
+
+.swap-seat-btn.seat-selected-a {
+  background: #FFBDA3 !important;
+  border: 2px solid #E27A55 !important;
+  color: #2B2E27 !important;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(255, 189, 163, 0.4);
+}
+
+.swap-seat-btn.seat-selected-b {
+  background: #8B9A6E !important;
+  border: 2px solid #58693F !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(139, 154, 110, 0.4);
+}
+
+.swap-seat-btn.seat-clash {
+  background: rgba(156, 70, 50, 0.18) !important;
+  border: 2px solid #9C4632 !important;
+  color: #9C4632 !important;
+  animation: pulseClash 1.2s infinite;
+}
+
+@keyframes pulseClash {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(156, 70, 50, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(156, 70, 50, 0.1); }
+}
+
+.swap-seat-roll {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.swap-seat-code {
+  font-size: 0.65rem;
+  color: #6E7068;
+  margin-top: 2px;
+}
+
+.swap-seat-btn.seat-selected-b .swap-seat-code {
+  color: #E6EDD9;
+}
+

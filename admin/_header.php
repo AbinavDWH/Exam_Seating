@@ -22,18 +22,19 @@ $nav = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= csrf_token() ?>">
-<title><?= htmlspecialchars($pageTitle ?? 'Admin') ?> · ExamSeat University Portal</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<title><?= htmlspecialchars($pageTitle ?? 'Admin') ?> · DeskMap University Portal</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 </head>
 <body>
 <div class="admin-shell">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-icon"><?= svg_icon('seat-grid', '', 20) ?></div>
-      <span class="brand-name">ExamSeat</span>
-      <span class="brand-badge">CELL</span>
-    </div>
+    <a href="index.php" class="brand">
+      <img src="assets/deskmap-mark.svg" alt="DeskMap" class="brand-mark" width="34" height="34">
+      <span class="brand-name">DeskMap</span>
+    </a>
     <nav>
       <?php foreach ($nav as $file => [$icon, $label]): ?>
         <a href="<?= $file ?>" class="<?= $currentPage === $file ? 'active' : '' ?>">
@@ -45,7 +46,7 @@ $nav = [
       <div class="sidebar-divider"></div>
 
       <a href="<?= htmlspecialchars($studentPortalUrl) ?>" target="_blank" class="portal-link">
-        <span class="sidebar-icon-cell"><?= svg_icon('box-arrow-up-right', '', 16) ?></span>
+        <span class="sidebar-icon-cell"><?= svg_icon('eye', '', 16) ?></span>
         <span class="sidebar-label">Student Portal</span>
       </a>
 

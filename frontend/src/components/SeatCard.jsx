@@ -114,7 +114,7 @@ Desk Coordinates: Row ${data.row_num}, Column ${data.col_num} · Desk #${data.be
   };
 
   return (
-    <div className="seat-card card-enter print-area">
+    <div className="seat-card print-area">
       {/* College header printed only when user prints ticket */}
       <div className="print-college-header">
         <div className="print-logo-wrap">

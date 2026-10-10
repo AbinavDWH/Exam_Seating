@@ -40,6 +40,7 @@ $stats = db()->query("SELECT
   (SELECT COUNT(*) FROM students) AS students,
   (SELECT COUNT(*) FROM rooms WHERE active=1) AS rooms,
   (SELECT IFNULL(SUM(rows_count*cols_count),0) FROM rooms WHERE active=1) AS capacity,
+  (SELECT COUNT(*) FROM exams) AS exams_count,
   (SELECT COUNT(*) FROM seating) AS seats")->fetch();
 
 $exams = db()->query("SELECT e.*,
@@ -47,516 +48,370 @@ $exams = db()->query("SELECT e.*,
   (SELECT COUNT(*) FROM seating s WHERE s.exam_id=e.id) AS assigned
   FROM exams e ORDER BY e.exam_date DESC")->fetchAll();
 
-$upcomingCount = (int)db()->query("SELECT COUNT(*) FROM exams WHERE status='upcoming'")->fetchColumn();
-
-$cards = [
-    [
-        'id'    => 'students',
-        'icon'  => 'users',
-        'bg'    => '#EEF2E6',
-        'color' => '#43522C',
-        'label' => 'Registered Students',
-        'value' => $stats['students'],
-        'link'  => 'students.php',
-    ],
-    [
-        'id'    => 'rooms',
-        'icon'  => 'building',
-        'bg'    => '#FAF3E1',
-        'color' => '#6B4E0E',
-        'label' => 'Active Exam Halls',
-        'value' => $stats['rooms'],
-        'link'  => 'rooms.php',
-    ],
-    [
-        'id'    => 'capacity',
-        'icon'  => 'grid',
-        'bg'    => '#EDF3F8',
-        'color' => '#27384B',
-        'label' => 'Total Seating Capacity',
-        'value' => $stats['capacity'],
-        'link'  => 'rooms.php',
-    ],
-    [
-        'id'    => 'seats',
-        'icon'  => 'check-circle',
-        'bg'    => '#FBF2E3',
-        'color' => '#70381D',
-        'label' => 'Seats Allocated',
-        'value' => $stats['seats'],
-        'link'  => 'generate.php',
-    ],
-];
+$studentsCount = (int)$stats['students'];
+$roomsCount = (int)$stats['rooms'];
+$examsCount = (int)$stats['exams_count'];
+$seatsCount = (int)$stats['seats'];
+$today = date('Y-m-d');
 ?>
 
-<!-- Page Header (Requirements 8, 22) -->
+<!-- Page Header with DM Serif Display title -->
 <div class="page-header">
   <div>
     <h1 class="page-title">
       <?= svg_icon('dashboard', 'text-primary', 26) ?>
-      Welcome back, <?= htmlspecialchars($_SESSION['admin_user']) ?>
+      Dashboard
     </h1>
     <div class="page-subtitle">
-      <?= svg_icon('calendar', 'text-muted', 15) ?>
-      <span><?= date('l, j F Y') ?></span>
-      <span>•</span>
-      <span><?= (int)$upcomingCount ?> upcoming exam session<?= $upcomingCount === 1 ? '' : 's' ?> scheduled</span>
+      <span><?= date('l, j F Y') ?> · Overview of university examination readiness</span>
     </div>
   </div>
   <div class="d-flex align-items-center gap-2">
-    <a href="exams.php" class="btn btn-primary-soft">
+    <a href="exams.php" class="btn btn-grad">
       <?= svg_icon('plus', 'me-1', 16) ?>
-      Schedule Exam
+      Create exam
     </a>
   </div>
 </div>
 
-<!-- 4 Stat Cards in One Row (Requirements 1, 2, 3, 9, 11, 13) -->
-<div class="stat-grid">
-  <?php foreach ($cards as $c): ?>
-    <a href="<?= $c['link'] ?>" class="stat-card" title="Open <?= htmlspecialchars($c['label']) ?>">
-      <div class="stat-icon" style="background:<?= $c['bg'] ?>; color:<?= $c['color'] ?>;">
-        <?= svg_icon($c['icon'], '', 24) ?>
+<!-- Real Sequence Workflow with Ticks (Numbered 1 to 4) -->
+<div class="workflow-sequence-card">
+  <div class="workflow-sequence-header">
+    <h2 class="workflow-sequence-title">Examination Setup Workflow</h2>
+    <span class="small text-muted">Complete steps in sequence to publish conflict-free seating</span>
+  </div>
+
+  <div class="workflow-steps-grid">
+    <!-- Step 1: Students uploaded -->
+    <a href="students.php" class="workflow-step-card <?= $studentsCount > 0 ? 'completed' : '' ?>">
+      <div class="step-title-text">
+        <span>1. Students uploaded</span>
+        <?php if ($studentsCount > 0): ?>
+          <span class="text-success fw-bold" style="color: var(--brand-sage); font-size: 1.1rem;">✔</span>
+        <?php else: ?>
+          <span class="text-muted small">Pending</span>
+        <?php endif; ?>
       </div>
-      <div class="stat-content">
-        <div class="stat-number"><?= number_format((int)$c['value']) ?></div>
-        <div class="stat-label"><?= $c['label'] ?></div>
-      </div>
-      <div class="stat-arrow">
-        <?= svg_icon('arrow-up-right', '', 18) ?>
+      <div class="step-status-desc">
+        <?php if ($studentsCount > 0): ?>
+          <?= number_format($studentsCount) ?> students registered across cohorts
+        <?php else: ?>
+          Upload student roster CSV file
+        <?php endif; ?>
       </div>
     </a>
-  <?php endforeach; ?>
+
+    <!-- Step 2: Halls ready -->
+    <a href="rooms.php" class="workflow-step-card <?= $roomsCount > 0 ? 'completed' : '' ?>">
+      <div class="step-title-text">
+        <span>2. Halls ready</span>
+        <?php if ($roomsCount > 0): ?>
+          <span class="text-success fw-bold" style="color: var(--brand-sage); font-size: 1.1rem;">✔</span>
+        <?php else: ?>
+          <span class="text-muted small">Pending</span>
+        <?php endif; ?>
+      </div>
+      <div class="step-status-desc">
+        <?php if ($roomsCount > 0): ?>
+          <?= number_format($roomsCount) ?> active exam halls (<?= number_format((int)$stats['capacity']) ?> desks)
+        <?php else: ?>
+          Configure examination hall layouts
+        <?php endif; ?>
+      </div>
+    </a>
+
+    <!-- Step 3: Exam created -->
+    <a href="exams.php" class="workflow-step-card <?= $examsCount > 0 ? 'completed' : '' ?>">
+      <div class="step-title-text">
+        <span>3. Exam created</span>
+        <?php if ($examsCount > 0): ?>
+          <span class="text-success fw-bold" style="color: var(--brand-sage); font-size: 1.1rem;">✔</span>
+        <?php else: ?>
+          <span class="text-muted small">Pending</span>
+        <?php endif; ?>
+      </div>
+      <div class="step-status-desc">
+        <?php if ($examsCount > 0): ?>
+          <?= number_format($examsCount) ?> examination sessions scheduled
+        <?php else: ?>
+          Schedule your first examination session
+        <?php endif; ?>
+      </div>
+    </a>
+
+    <!-- Step 4: Seating generated -->
+    <a href="generate.php" class="workflow-step-card <?= $seatsCount > 0 ? 'completed' : '' ?>">
+      <div class="step-title-text">
+        <span>4. Seating generated</span>
+        <?php if ($seatsCount > 0): ?>
+          <span class="text-success fw-bold" style="color: var(--brand-sage); font-size: 1.1rem;">✔</span>
+        <?php else: ?>
+          <span class="text-muted small">Pending</span>
+        <?php endif; ?>
+      </div>
+      <div class="step-status-desc">
+        <?php if ($seatsCount > 0): ?>
+          <?= number_format($seatsCount) ?> seats allocated with 0 clashes
+        <?php else: ?>
+          Run automatic conflict-free allocation
+        <?php endif; ?>
+      </div>
+    </a>
+  </div>
 </div>
 
-<!-- Scheduled Examinations Table Card (Requirements 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16) -->
+<!-- Scheduled Examinations Table Card -->
 <div class="table-card">
   <div class="table-card-header">
     <div class="table-card-title">
-      <div class="text-primary d-inline-flex"><?= svg_icon('calendar', '', 22) ?></div>
+      <div class="text-primary d-inline-flex"><?= svg_icon('calendar', '', 20) ?></div>
       <div>
-        <h6>Scheduled Examinations</h6>
-        <div class="table-card-subtitle">Manage sessions, monitor seat fills, and launch seating plans</div>
+        <h6 class="mb-0 fw-bold">Scheduled Examination Sessions</h6>
+        <div class="table-card-subtitle">Manage sessions, review seat allocations, and generate plans</div>
       </div>
     </div>
     <div>
       <a href="exams.php" class="btn btn-primary-soft btn-sm">
-        <?= svg_icon('plus', 'me-1', 15) ?>Schedule New Exam
+        <?= svg_icon('plus', 'me-1', 14) ?>Create exam
       </a>
     </div>
   </div>
 
-  <!-- Search & Filter Controls (Requirement 14) -->
+  <!-- Search & Row-Count Selector -->
   <div class="table-filter-bar">
-    <div class="table-search-box">
+    <div class="table-search-box flex-grow-1" style="max-width: 320px;">
       <div class="table-search-icon"><?= svg_icon('search', '', 16) ?></div>
-      <input type="text" id="examSearchInput" class="form-control form-control-sm table-search-input" placeholder="Search exams by name..." autocomplete="off">
+      <input type="text" id="dashSearchInput" class="form-control form-control-sm table-search-input" placeholder="Search exams by name…" autocomplete="off">
     </div>
-    
-    <select id="examSemFilter" class="form-select form-select-sm table-filter-select">
-      <option value="">All Semesters</option>
+
+    <select id="dashSemFilter" class="form-select form-select-sm table-filter-select" style="max-width: 150px;">
+      <option value="">All semesters</option>
       <?php for ($s = 1; $s <= 8; $s++): ?>
         <option value="Sem <?= $s ?>">Sem <?= $s ?></option>
       <?php endfor; ?>
     </select>
 
-    <select id="examStatusFilter" class="form-select form-select-sm table-filter-select">
-      <option value="">All Statuses</option>
-      <option value="upcoming">Upcoming</option>
-      <option value="ongoing">Ongoing</option>
-      <option value="completed">Completed</option>
-    </select>
-
-    <button type="button" id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" style="border-radius:10px;">
-      <?= svg_icon('x', '', 14) ?>Reset
-    </button>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <label for="dashPerPageSelector" class="small text-muted mb-0">Rows:</label>
+      <select id="dashPerPageSelector" class="form-select form-select-sm" style="width: 80px;">
+        <option value="10">10</option>
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
   </div>
 
   <div class="table-responsive">
-    <table class="table align-middle" id="examsTable">
+    <table class="table align-middle mb-0" id="dashExamsTable">
       <thead>
         <tr>
-          <th class="col-exam sortable-th active-sort" data-col="0" data-type="text">
-            Exam Name <span class="sort-icon"><?= svg_icon('sort', '', 13) ?></span>
-          </th>
-          <th class="col-date sortable-th" data-col="1" data-type="date">
-            Date &amp; Time <span class="sort-icon"><?= svg_icon('sort', '', 13) ?></span>
-          </th>
-          <th class="col-sem sortable-th" data-col="2" data-type="text">
-            Target Sem <span class="sort-icon"><?= svg_icon('sort', '', 13) ?></span>
-          </th>
-          <th class="col-status sortable-th" data-col="3" data-type="text">
-            Status <span class="sort-icon"><?= svg_icon('sort', '', 13) ?></span>
-          </th>
-          <th class="col-allocated sortable-th" data-col="4" data-type="number">
-            Seated Progress <span class="sort-icon"><?= svg_icon('sort', '', 13) ?></span>
-          </th>
-          <th class="col-actions text-end">
-            Actions
-          </th>
+          <th class="col-exam">Exam name</th>
+          <th class="col-date">Date and time</th>
+          <th class="col-sem">Semester</th>
+          <th class="col-status">Status</th>
+          <th class="col-allocated">Seated progress</th>
+          <th class="col-actions text-end">Actions</th>
         </tr>
       </thead>
-      <tbody id="examsTableBody">
-        <?php 
-          $today = date('Y-m-d');
-          foreach ($exams as $e):
+      <tbody id="dashExamsTableBody">
+        <?php foreach ($exams as $e):
             $assigned = (int)$e['assigned'];
             $totalStudents = (int)$e['students_count'];
             $pct = $totalStudents > 0 ? (int)round(($assigned / $totalStudents) * 100) : 0;
-            
-            // Auto-compute status from today's date (Item 4)
             $examDateStr = $e['exam_date'];
+
             if ($examDateStr < $today) {
-                $statusClass = 'status-completed'; // grey
+                $statusClass = 'status-completed';
                 $statusLabel = 'Completed';
                 $autoStatus = 'completed';
             } elseif ($examDateStr === $today) {
-                $statusClass = 'status-ongoing';   // blue
+                $statusClass = 'status-ongoing';
                 $statusLabel = 'Ongoing';
                 $autoStatus = 'ongoing';
             } else {
-                $statusClass = 'status-upcoming';  // soft amber
+                $statusClass = 'status-upcoming';
                 $statusLabel = 'Upcoming';
                 $autoStatus = 'upcoming';
             }
-
-            // Progress bar color by value (sage fill; dark sage at 100%)
-            if ($pct >= 100) {
-                $fillColor = '#43522C'; // dark sage at 100%
-            } elseif ($pct > 0) {
-                $fillColor = '#8B9A6E'; // brand sage
-            } else {
-                $fillColor = '#D8D3CA'; // beige/neutral
-            }
-            $progressTooltip = number_format($assigned) . ' of ' . number_format($totalStudents) . ' students seated (' . $pct . '%)';
         ?>
           <tr data-exam-id="<?= $e['id'] ?>"
               data-name="<?= htmlspecialchars(strtolower($e['exam_name'])) ?>"
               data-sem="Sem <?= (int)$e['semester'] ?>"
               data-status="<?= $autoStatus ?>"
-              data-date="<?= $e['exam_date'] ?> <?= $e['start_time'] ?>"
-              data-pct="<?= $pct ?>">
-            
-            <!-- Column 1: Exam (Left aligned) -->
+              data-raw-name="<?= htmlspecialchars($e['exam_name'], ENT_QUOTES) ?>"
+              data-assigned="<?= $assigned ?>">
             <td class="col-exam">
               <div class="fw-semibold text-main"><?= htmlspecialchars($e['exam_name']) ?></div>
             </td>
-
-            <!-- Column 2: Date & Time (Left aligned) -->
             <td class="col-date">
               <div class="fw-medium text-main"><?= date('d M Y', strtotime($e['exam_date'])) ?></div>
               <div class="text-muted small"><?= date('h:i A', strtotime($e['start_time'])) ?></div>
             </td>
-
-            <!-- Column 3: Target Sem (Center aligned) -->
             <td class="col-sem">
-              <span class="badge bg-light text-dark border px-2.5 py-1.5" style="border-radius: 8px; font-weight: 600;">
-                Sem <?= (int)$e['semester'] ?>
-              </span>
+              <span class="badge bg-light text-dark border">Sem <?= (int)$e['semester'] ?></span>
             </td>
-
-            <!-- Column 4: Status (Center aligned) -->
             <td class="col-status">
               <span class="status-pill <?= $statusClass ?>">
                 <span class="status-dot"></span>
-                <?= $statusLabel ?>
+                <span><?= $statusLabel ?></span>
               </span>
             </td>
-
-            <!-- Column 5: Allocated Progress Bar (Left aligned) with tooltip -->
             <td class="col-allocated">
-              <div class="seated-progress-wrapper" data-bs-toggle="tooltip" title="<?= htmlspecialchars($progressTooltip) ?>">
-                <div class="seated-progress-info">
-                  <span class="seated-progress-count"><?= number_format($assigned) ?> / <?= number_format($totalStudents) ?> Seated</span>
-                  <span class="seated-progress-pct"><?= $pct ?>%</span>
+              <div class="d-flex align-items-center gap-2">
+                <div class="progress flex-grow-1" style="height: 6px; background: #EAE2D6; border-radius: 999px;">
+                  <div class="progress-bar" style="width: <?= $pct ?>%; background: <?= $pct >= 100 ? '#43522C' : ($pct > 0 ? '#8B9A6E' : '#D8CFBF') ?>;"></div>
                 </div>
-                <div class="seated-progress-track">
-                  <div class="seated-progress-fill" style="width: <?= $pct ?>%; background: <?= $fillColor ?>;"></div>
-                </div>
+                <span class="small text-muted text-nowrap"><?= $assigned ?> / <?= $totalStudents ?></span>
               </div>
             </td>
-
-            <!-- Column 6: Actions (Right aligned) -->
-            <td class="col-actions text-end text-nowrap">
-              <div class="action-buttons-group">
-                <!-- Swap Seats -->
-                <a href="swap.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-swap" data-bs-toggle="tooltip" title="Swap seats">
-                  <?= svg_icon('sort', '', 15) ?>
-                </a>
-
-                <!-- View / Print Seating Plan -->
-                <a href="print_plan.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-view" data-bs-toggle="tooltip" title="Print sheets">
-                  <?= svg_icon('printer', '', 15) ?>
-                </a>
-
-                <!-- Generate Seating -->
-                <a href="generate.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-generate" data-bs-toggle="tooltip" title="Generate seating">
-                  <?= svg_icon('magic', '', 15) ?>
-                </a>
-
-                <!-- Export CSV -->
-                <a href="../api/export.php?exam_id=<?= $e['id'] ?>" class="btn-action btn-action-edit" data-bs-toggle="tooltip" title="Export CSV">
-                  <?= svg_icon('download', '', 15) ?>
-                </a>
-
-                <!-- Delete Exam -->
-                <button type="button" class="btn-action btn-action-delete btn-delete-exam"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteExamModal"
-                        title="Delete"
-                        data-id="<?= $e['id'] ?>"
-                        data-name="<?= htmlspecialchars($e['exam_name'], ENT_QUOTES) ?>">
-                  <?= svg_icon('trash', '', 15) ?>
-                </button>
-              </div>
+            <td class="col-actions text-end">
+              <a href="generate.php?exam_id=<?= $e['id'] ?>" class="btn btn-sm btn-outline-secondary" title="Generate seating plan">
+                <?= svg_icon('magic', '', 14) ?>
+              </a>
+              <button type="button" class="btn-action btn-action-delete" title="Delete exam" onclick="confirmDeleteDashExam(this)">
+                <?= svg_icon('trash', '', 14) ?>
+              </button>
             </td>
           </tr>
         <?php endforeach; ?>
+        <?php if (!$exams): ?>
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              No examination sessions scheduled yet.
+            </td>
+          </tr>
+        <?php endif; ?>
       </tbody>
     </table>
   </div>
 
-  <!-- Friendly Empty State (Requirement 16) -->
-  <div id="tableEmptyState" class="table-empty-state" style="<?= count($exams) === 0 ? '' : 'display:none;' ?>">
-    <div class="empty-state-icon">
-      <?= svg_icon('calendar', '', 28) ?>
-    </div>
-    <div class="empty-state-title" id="emptyStateTitle">No exam sessions yet – create one</div>
-    <div class="empty-state-text" id="emptyStateText">
-      Get started by scheduling your university examination sessions to assign students and allocate halls.
-    </div>
-    <a href="exams.php" class="btn btn-grad">
-      <?= svg_icon('plus', 'me-1', 16) ?>
-      Schedule Exam Session
-    </a>
-  </div>
-</div>
-
-<!-- Modal: Delete Confirmation Popup (Requirement 18) -->
-<div class="modal fade" id="deleteExamModal" tabindex="-1" aria-labelledby="deleteExamModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2" id="deleteExamModalLabel">
-          <?= svg_icon('alert-triangle', '', 20) ?>
-          Delete Exam Session
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" action="index.php">
-        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="id" id="deleteExamId" value="">
-        <div class="modal-body py-3">
-          <p class="text-body mb-2">Are you sure you want to delete <strong id="deleteExamName">this exam session</strong>?</p>
-          <div class="p-3 bg-danger-subtle rounded-3 text-danger small">
-            <?= svg_icon('alert-triangle', 'me-1', 15) ?>
-            This will permanently remove the exam session and clear all student seating assignments for it.
-          </div>
-        </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger px-3">Yes, Delete Exam</button>
-        </div>
-      </form>
+  <!-- Pagination Summary Footer -->
+  <div class="table-pagination-row">
+    <span class="small text-muted" id="dashShowingCount">
+      Showing 1–<?= count($exams) ?> of <?= count($exams) ?>
+    </span>
+    <div class="d-flex gap-1" id="dashPaginationControls">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="dashPrevPageBtn" disabled>Prev</button>
+      <span class="btn btn-sm btn-light disabled px-3" id="dashPageIndicator">1 / 1</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="dashNextPageBtn" disabled>Next</button>
     </div>
   </div>
 </div>
 
-<!-- Modal: Quick Edit Exam Session -->
-<div class="modal fade" id="editExamModal" tabindex="-1" aria-labelledby="editExamModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="editExamModalLabel">
-          <?= svg_icon('edit', 'text-primary', 20) ?>
-          Edit Exam Session
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Delete Confirmation Modal (Says what will be lost) -->
+<div class="side-panel-overlay" id="dashDeleteModalOverlay" onclick="closeDashDeleteModal()"></div>
+<div class="side-panel" id="dashDeleteConfirmModal" style="width: min(440px, 100vw); height: auto; top: 20%; bottom: auto; border-radius: 16px; margin: 0 auto; left: 0; right: 0;" role="dialog">
+  <div class="side-panel-header border-0 pb-0">
+    <h3 class="side-panel-title text-danger" style="font-size: 1.25rem;">Delete exam</h3>
+    <button type="button" class="side-panel-close" onclick="closeDashDeleteModal()">
+      <?= svg_icon('x', '', 18) ?>
+    </button>
+  </div>
+  <div class="side-panel-body py-3">
+    <p id="dashDeleteConsequenceText" class="mb-4 text-main fw-medium">
+      Deleting this exam will un-seat all students assigned to it.
+    </p>
+    <form method="post" action="index.php">
+      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="id" id="dashDeleteTargetId" value="">
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-danger flex-grow-1" style="background:#9C4632; border-color:#9C4632;">Delete exam</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="closeDashDeleteModal()">Cancel</button>
       </div>
-      <form method="post" action="index.php">
-        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-        <input type="hidden" name="action" value="edit">
-        <input type="hidden" name="id" id="editExamId" value="">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Exam Name</label>
-            <input type="text" name="exam_name" id="editExamName" class="form-control" required>
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-7">
-              <label class="form-label small fw-semibold">Date</label>
-              <input type="date" name="exam_date" id="editExamDate" class="form-control" required>
-            </div>
-            <div class="col-5">
-              <label class="form-label small fw-semibold">Start Time</label>
-              <input type="time" name="start_time" id="editExamTime" class="form-control" required>
-            </div>
-          </div>
-          <div class="row g-2">
-            <div class="col-6">
-              <label class="form-label small fw-semibold">Target Semester</label>
-              <input type="number" name="semester" id="editExamSem" min="1" max="8" class="form-control" required>
-            </div>
-            <div class="col-6">
-              <label class="form-label small fw-semibold">Status</label>
-              <select name="status" id="editExamStatus" class="form-select">
-                <option value="upcoming">Upcoming</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-grad">Save Changes</button>
-        </div>
-      </form>
-    </div>
+    </form>
   </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  // Elements
-  const searchInput = document.getElementById('examSearchInput');
-  const semFilter = document.getElementById('examSemFilter');
-  const statusFilter = document.getElementById('examStatusFilter');
-  const resetBtn = document.getElementById('resetFiltersBtn');
-  const tableBody = document.getElementById('examsTableBody');
-  const emptyState = document.getElementById('tableEmptyState');
-  const emptyTitle = document.getElementById('emptyStateTitle');
-  const emptyText = document.getElementById('emptyStateText');
-  const table = document.getElementById('examsTable');
+function confirmDeleteDashExam(btn) {
+  const tr = btn.closest('tr');
+  const examId = tr.dataset.examId;
+  const examName = tr.dataset.rawName;
+  const assigned = parseInt(tr.dataset.assigned || '0', 10);
 
-  // Filter Function (Requirement 14)
-  function applyFilters() {
-    const query = searchInput.value.trim().toLowerCase();
-    const semVal = semFilter.value;
-    const statusVal = statusFilter.value.toLowerCase();
-    const rows = tableBody.querySelectorAll('tr');
-    let visibleCount = 0;
-
-    rows.forEach(row => {
-      const name = row.getAttribute('data-name') || '';
-      const sem = row.getAttribute('data-sem') || '';
-      const status = row.getAttribute('data-status') || '';
-
-      const matchesQuery = !query || name.includes(query);
-      const matchesSem = !semVal || sem === semVal;
-      const matchesStatus = !statusVal || status === statusVal;
-
-      if (matchesQuery && matchesSem && matchesStatus) {
-        row.style.display = '';
-        visibleCount++;
-      } else {
-        row.style.display = 'none';
-      }
-    });
-
-    if (visibleCount === 0) {
-      table.style.display = 'none';
-      emptyState.style.display = 'block';
-      if (rows.length === 0) {
-        emptyTitle.textContent = 'No exam sessions yet – create one';
-        emptyText.textContent = 'Get started by scheduling your university examination sessions to assign students and allocate halls.';
-      } else {
-        emptyTitle.textContent = 'No matching exam sessions found';
-        emptyText.textContent = 'None of your exam sessions match the active search criteria or filters. Try adjusting your filters.';
-      }
-    } else {
-      table.style.display = '';
-      emptyState.style.display = 'none';
-    }
+  document.getElementById('dashDeleteTargetId').value = examId;
+  const p = document.getElementById('dashDeleteConsequenceText');
+  if (assigned > 0) {
+    p.textContent = `Deleting ${examName} un-seats ${assigned} student${assigned === 1 ? '' : 's'}.`;
+  } else {
+    p.textContent = `Deleting ${examName} removes this session.`;
   }
 
-  searchInput.addEventListener('input', applyFilters);
-  semFilter.addEventListener('change', applyFilters);
-  statusFilter.addEventListener('change', applyFilters);
+  document.getElementById('dashDeleteConfirmModal').classList.add('open');
+  document.getElementById('dashDeleteModalOverlay').classList.add('active');
+}
 
-  resetBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    semFilter.value = '';
-    statusFilter.value = '';
-    applyFilters();
-  });
+function closeDashDeleteModal() {
+  document.getElementById('dashDeleteConfirmModal').classList.remove('open');
+  document.getElementById('dashDeleteModalOverlay').classList.remove('active');
+}
 
-  // Table Column Sorting (Requirement 15)
-  const headers = table.querySelectorAll('th.sortable-th');
-  let currentSort = { col: 0, asc: true };
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('dashSearchInput');
+  const semFilter = document.getElementById('dashSemFilter');
+  const perPageSelect = document.getElementById('dashPerPageSelector');
+  const tbody = document.getElementById('dashExamsTableBody');
+  const rows = Array.from(tbody.querySelectorAll('tr[data-exam-id]'));
+  const countLabel = document.getElementById('dashShowingCount');
+  const prevBtn = document.getElementById('dashPrevPageBtn');
+  const nextBtn = document.getElementById('dashNextPageBtn');
+  const pageIndicator = document.getElementById('dashPageIndicator');
 
-  headers.forEach(th => {
-    th.addEventListener('click', () => {
-      const colIndex = parseInt(th.getAttribute('data-col'), 10);
-      const type = th.getAttribute('data-type') || 'text';
+  let currentPage = 1;
 
-      if (currentSort.col === colIndex) {
-        currentSort.asc = !currentSort.asc;
-      } else {
-        currentSort.col = colIndex;
-        currentSort.asc = true;
-      }
+  function filterAndPaginate() {
+    const q = searchInput.value.toLowerCase().trim();
+    const sem = semFilter.value;
+    const perPage = parseInt(perPageSelect.value, 10);
 
-      headers.forEach(h => h.classList.remove('active-sort'));
-      th.classList.add('active-sort');
-
-      const rows = Array.from(tableBody.querySelectorAll('tr'));
-      rows.sort((a, b) => {
-        let valA, valB;
-        if (colIndex === 0) {
-          valA = a.getAttribute('data-name');
-          valB = b.getAttribute('data-name');
-        } else if (colIndex === 1) {
-          valA = a.getAttribute('data-date');
-          valB = b.getAttribute('data-date');
-        } else if (colIndex === 2) {
-          valA = a.getAttribute('data-sem');
-          valB = b.getAttribute('data-sem');
-        } else if (colIndex === 3) {
-          valA = a.getAttribute('data-status');
-          valB = b.getAttribute('data-status');
-        } else if (colIndex === 4) {
-          valA = parseInt(a.getAttribute('data-pct'), 10) || 0;
-          valB = parseInt(b.getAttribute('data-pct'), 10) || 0;
-        }
-
-        if (type === 'number') {
-          return currentSort.asc ? valA - valB : valB - valA;
-        } else {
-          return currentSort.asc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
-        }
-      });
-
-      rows.forEach(r => tableBody.appendChild(r));
+    const filtered = rows.filter(r => {
+      const name = r.dataset.name;
+      const rSem = r.dataset.sem;
+      const matchQ = !q || name.includes(q);
+      const matchSem = !sem || rSem === sem;
+      return matchQ && matchSem;
     });
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * perPage;
+    const end = start + perPage;
+
+    rows.forEach(r => r.style.display = 'none');
+    filtered.slice(start, end).forEach(r => r.style.display = '');
+
+    if (total === 0) {
+      countLabel.textContent = 'Showing 0 of 0';
+    } else {
+      countLabel.textContent = `Showing ${start + 1}–${Math.min(total, end)} of ${total}`;
+    }
+
+    pageIndicator.textContent = `${currentPage} / ${totalPages}`;
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= totalPages;
+  }
+
+  searchInput.addEventListener('input', () => { currentPage = 1; filterAndPaginate(); });
+  semFilter.addEventListener('change', () => { currentPage = 1; filterAndPaginate(); });
+  perPageSelect.addEventListener('change', () => { currentPage = 1; filterAndPaginate(); });
+
+  prevBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      filterAndPaginate();
+    }
   });
 
-  // Delete Modal Setup (Requirement 18)
-  const deleteModal = document.getElementById('deleteExamModal');
-  deleteModal.addEventListener('show.bs.modal', (event) => {
-    const btn = event.relatedTarget;
-    const id = btn.getAttribute('data-id');
-    const name = btn.getAttribute('data-name');
-    document.getElementById('deleteExamId').value = id;
-    document.getElementById('deleteExamName').textContent = `"${name}"`;
+  nextBtn.addEventListener('click', () => {
+    currentPage++;
+    filterAndPaginate();
   });
 
-  // Edit Modal Setup
-  const editModal = document.getElementById('editExamModal');
-  editModal.addEventListener('show.bs.modal', (event) => {
-    const btn = event.relatedTarget;
-    document.getElementById('editExamId').value = btn.getAttribute('data-id');
-    document.getElementById('editExamName').value = btn.getAttribute('data-name');
-    document.getElementById('editExamDate').value = btn.getAttribute('data-date');
-    document.getElementById('editExamTime').value = btn.getAttribute('data-time');
-    document.getElementById('editExamSem').value = btn.getAttribute('data-sem');
-    document.getElementById('editExamStatus').value = btn.getAttribute('data-status');
-  });
-
-  // Initialize Tooltips (Item 27)
-  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-  [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+  filterAndPaginate();
 });
 </script>
 

@@ -45,63 +45,103 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Change Password · ExamSeat Administration</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<title>Change password · DeskMap</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 <style>
   body {
     min-height: 100vh;
     display: grid;
     place-items: center;
-    background: radial-gradient(120% 120% at 50% 10%, #1e1b4b 0%, #090d16 100%);
+    background: var(--admin-bg, #EAE2D6);
     padding: 20px;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: var(--text-main, #2B2E27);
   }
-  .login-card {
+  .change-card {
     width: 100%;
     max-width: 440px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
+    border: 1px solid #D8CFBF;
+    border-radius: 16px;
     background: #ffffff;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
+    box-shadow: none;
+    padding: 36px 32px;
+  }
+  .form-control {
+    width: 100%;
+    height: 44px;
+    border: 1px solid #D8CFBF;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    color: #2B2E27;
+    background: #ffffff;
+    box-sizing: border-box;
+  }
+  .form-control:focus {
+    border-color: #8B9A6E;
+    outline: 2px solid #8B9A6E;
+    outline-offset: 1px;
+  }
+  .btn-submit {
+    width: 100%;
+    height: 48px;
+    background: #FFBDA3;
+    color: #261B14;
+    border: 1px solid #F3A88D;
+    border-radius: 8px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .btn-submit:hover {
+    background: #F7A384;
+  }
+  .btn-submit:focus-visible {
+    outline: 2px solid #2B2E27;
+    outline-offset: 2px;
   }
 </style>
 </head>
 <body>
-<div class="login-card p-4 p-md-5">
-  <div class="text-center mb-4">
-    <div class="d-inline-flex align-items-center justify-content-center p-3 rounded-circle mb-3" style="background:#fef2f2; color:#ef4444; width:64px; height:64px;">
-      <i class="bi bi-shield-lock-fill fs-2"></i>
-    </div>
-    <h3 class="fw-bold mb-1"><?= !empty($_SESSION['must_change_password']) ? 'Set New Password' : 'Change Password' ?></h3>
-    <p class="text-muted small"><?= !empty($_SESSION['must_change_password']) ? 'Default credentials detected. For security, please choose a strong administrator password before continuing.' : 'Enter your current password and choose a strong new password.' ?></p>
+<div class="change-card">
+  <div class="text-center mb-3">
+    <img src="assets/deskmap-full.svg" alt="DeskMap" style="width: 80px; height: auto;">
   </div>
+  <h2 style="font-family: 'DM Serif Display', Georgia, serif; font-size: 1.5rem; text-align: center; margin: 0 0 8px; font-weight: 400;">
+    <?= !empty($_SESSION['must_change_password']) ? 'Set new password' : 'Change password' ?>
+  </h2>
+  <p class="text-muted small text-center mb-4" style="color: #6B6F62; font-size: 0.88rem;">
+    <?= !empty($_SESSION['must_change_password']) ? 'Default credentials detected. Choose a secure administrator password before continuing.' : 'Enter your current password and choose a secure new password.' ?>
+  </p>
 
   <?php if ($error): ?>
-    <div class="alert alert-danger py-2 small d-flex align-items-center gap-2 mb-3">
-      <i class="bi bi-exclamation-octagon-fill"></i>
+    <div style="background: #F9ECE8; border: 1px solid #F0CFC7; color: #7D3020; border-radius: 8px; padding: 10px 14px; font-size: 0.86rem; margin-bottom: 18px; display: flex; align-items: center; gap: 8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <div><?= htmlspecialchars($error) ?></div>
     </div>
   <?php endif; ?>
 
   <form method="post" action="change_password.php">
     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-    <div class="mb-3">
-      <label class="form-label small fw-semibold">Current Password</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 0.84rem; font-weight: 700; margin-bottom: 6px;">Current password</label>
       <input type="password" name="current_password" class="form-control" placeholder="Enter current password" required autofocus>
     </div>
-    <div class="mb-3">
-      <label class="form-label small fw-semibold">New Password</label>
-      <input type="password" name="new_password" class="form-control" placeholder="Minimum 8 characters (mixed case & numbers)" required minlength="8">
-      <div class="form-text text-muted" style="font-size:0.78rem;">Must contain at least 8 characters, an uppercase letter, a lowercase letter, and a number.</div>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 0.84rem; font-weight: 700; margin-bottom: 6px;">New password</label>
+      <input type="password" name="new_password" class="form-control" placeholder="Minimum 8 characters" required minlength="8">
+      <div style="font-size: 0.76rem; color: #6B6F62; margin-top: 4px;">Must contain at least 8 characters, an uppercase letter, a lowercase letter, and a number.</div>
     </div>
-    <div class="mb-4">
-      <label class="form-label small fw-semibold">Confirm New Password</label>
+    <div style="margin-bottom: 22px;">
+      <label style="display: block; font-size: 0.84rem; font-weight: 700; margin-bottom: 6px;">Confirm new password</label>
       <input type="password" name="confirm_password" class="form-control" placeholder="Re-enter new password" required minlength="8">
     </div>
-    <button class="btn btn-grad w-100 py-2.5 mb-3" type="submit">
-      Save Password &amp; Continue →
+    <button class="btn-submit" type="submit">
+      Save changes
     </button>
   </form>
 </div>

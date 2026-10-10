@@ -12,10 +12,10 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
   <div>
     <h1 class="page-title">
       <?= svg_icon('magic', 'text-primary', 26) ?>
-      Generate Seating Plan
+      Generate Seating
     </h1>
     <div class="page-subtitle">
-      <span>Automatic conflict-free interleaving across departments, cohorts, and exam codes</span>
+      <span>Automatic conflict-free interleaving across departments and examination papers</span>
     </div>
   </div>
 </div>
@@ -28,24 +28,18 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
           <?= svg_icon('magic', '', 20) ?>
         </div>
         <div class="card-title-text">
-          <h6>Automatic Conflict-Free Seating</h6>
-          <p>Interleaves multi-year cohorts and departments across examination halls.</p>
+          <h6>Automatic Seating</h6>
+          <p>Interleaves multi-year cohorts and branches across examination halls.</p>
         </div>
       </div>
 
-      <!-- Info banner under description (Rule 7: soft blue/navy info palette) -->
-      <div class="alert alert-primary-subtle border border-primary-subtle py-2 px-3 rounded-3 text-primary-emphasis small d-flex align-items-center gap-2 mb-3">
-        <?= svg_icon('check-circle', 'text-primary flex-shrink-0', 16) ?>
-        <span>Ensures no adjacent desks share the same exam code across rows and columns.</span>
-      </div>
-
-      <!-- Step 1 Block (Item 9) -->
+      <!-- Step 1 -->
       <div class="step-block mb-3">
         <div class="step-block-header">
           <span class="step-number">1</span>
           <span>Select Exam Session</span>
         </div>
-        <label class="form-label" for="examSelect">Target Examination</label>
+        <label class="form-label" for="examSelect">Target examination</label>
         <select id="examSelect" class="form-select" onchange="updateExamInfo()">
           <option value="">— Select an exam session —</option>
           <?php foreach ($exams as $e): ?>
@@ -56,17 +50,17 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
         </select>
       </div>
 
-      <!-- Step 2 Block (Item 9, 10, 11, 12) -->
+      <!-- Step 2 -->
       <div class="step-block mb-3">
         <div class="step-block-header">
           <span class="step-number">2</span>
-          <span>Hall &amp; Bench Layout Settings</span>
+          <span>Hall and Bench Layout</span>
         </div>
         
         <div class="form-check mb-2">
           <input class="form-check-input" type="radio" name="benchMode" id="modeConfigured" value="configured" checked onchange="toggleMode()">
           <label class="form-check-label fw-semibold" for="modeConfigured">
-            Use Saved Room Layouts
+            Use saved room layouts
             <span class="d-block text-muted small fw-normal">Use <?= number_format($roomsCount) ?> active campus halls currently configured</span>
           </label>
         </div>
@@ -74,66 +68,61 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
         <div class="form-check mb-2">
           <input class="form-check-input" type="radio" name="benchMode" id="modeCustom" value="custom" onchange="toggleMode()">
           <label class="form-check-label fw-semibold" for="modeCustom">
-            Custom: Specify Rooms &amp; Desks
-            <span class="d-block text-muted small fw-normal">Provision custom classroom dimensions dynamically</span>
+            Custom rooms and desks
+            <span class="d-block text-muted small fw-normal">Specify room dimensions dynamically</span>
           </label>
         </div>
 
-        <!-- Custom Inputs Box with Smooth Slide-down (Item 12) -->
+        <!-- Custom Inputs Box -->
         <div id="customInputs" class="p-3 bg-light rounded-3 border mt-3" style="display:none;">
-          <div class="alert alert-info py-1.5 px-2.5 small mb-2 d-flex align-items-center gap-1.5" style="font-size:11.5px">
-            <?= svg_icon('info', 'flex-shrink-0', 14) ?>
-            <span>Safe custom rooms: In simulation mode, runs in-memory. If saved, creates unique halls without overwriting existing halls.</span>
-          </div>
           <div class="mb-2">
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <label class="form-label text-muted mb-0" for="numRooms">Number of Exam Halls</label>
-              <span class="badge bg-primary-subtle text-primary small">Scales to 1000+ Halls</span>
+              <label class="form-label text-muted mb-0" for="numRooms">Number of exam halls</label>
             </div>
             <input type="number" id="numRooms" class="form-control" value="2" min="1" max="5000" oninput="recalcCustom()">
           </div>
           <div class="row g-2 mb-2">
             <div class="col-6">
-              <label class="form-label text-muted mb-1" for="benchesPerRoom">Rows (Benches)</label>
+              <label class="form-label text-muted mb-1" for="benchesPerRoom">Rows (benches)</label>
               <input type="number" id="benchesPerRoom" class="form-control" value="15" min="1" max="100" oninput="recalcCustom()">
             </div>
             <div class="col-6">
-              <label class="form-label text-muted mb-1" for="studentsPerBench">Seats / Bench</label>
+              <label class="form-label text-muted mb-1" for="studentsPerBench">Seats / bench</label>
               <input type="number" id="studentsPerBench" class="form-control" value="2" min="1" max="20" oninput="recalcCustom()">
             </div>
           </div>
           <div class="d-flex gap-1 flex-wrap mb-2">
-            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(1000, 15, 2)">1,000 Halls (30k Desks)</button>
-            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(500, 15, 2)">500 Halls</button>
-            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(50, 15, 2)">50 Halls</button>
-            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(2, 5, 6)">2 Halls (60 Desks)</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(1000, 15, 2)">1,000 halls (30k desks)</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(500, 15, 2)">500 halls</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(50, 15, 2)">50 halls</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:11px" onclick="setPreset(2, 5, 6)">2 halls (60 desks)</button>
           </div>
           <div id="customCalc" class="small text-muted text-center pt-1 border-top">
-            Calculated Capacity: <strong>60 desks</strong> (2 rooms × 15 rows × 2 cols = 30 desks/room)
+            Calculated capacity: <strong>60 desks</strong> (2 rooms × 15 rows × 2 cols = 30 desks/room)
           </div>
         </div>
       </div>
 
-      <!-- Step 3 Block (Item 9, 11) -->
+      <!-- Step 3 -->
       <div class="step-block mb-3">
         <div class="step-block-header">
           <span class="step-number">3</span>
-          <span>Spacing &amp; Simulation Options</span>
+          <span>Spacing and Options</span>
         </div>
         
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="spacingAlternate">
           <label class="form-check-label fw-semibold" for="spacingAlternate">
-            Alternate Empty Desks (Checkerboard)
-            <span class="d-block text-muted small fw-normal">Recommended for single-paper or imbalanced batches (e.g. 90/10 split) to guarantee 0 adjacent clashes.</span>
+            Alternate empty desks (checkerboard)
+            <span class="d-block text-muted small fw-normal">Leaves every other seat empty; needs twice the seats.</span>
           </label>
         </div>
 
         <div class="form-check mb-1">
           <input class="form-check-input" type="checkbox" id="simulateOnly">
           <label class="form-check-label fw-semibold" for="simulateOnly">
-            Simulate in Memory (Preview only)
-            <span class="d-block text-muted small fw-normal">Calculates seating plan and checks clashes without modifying saved halls or database records.</span>
+            Simulate in memory (preview only)
+            <span class="d-block text-muted small fw-normal">Calculates seating plan and checks clashes without modifying saved records.</span>
           </label>
         </div>
       </div>
@@ -141,49 +130,63 @@ $roomsCount = (int)db()->query("SELECT COUNT(*) FROM rooms WHERE active=1")->fet
       <button id="genBtn" class="btn btn-grad w-100 py-2.5">
         <span id="genLabel" class="d-inline-flex align-items-center gap-1.5">
           <?= svg_icon('magic', '', 18) ?>
-          Generate Seating Plan
+          Generate seating
         </span>
       </button>
     </div>
   </div>
 
   <div class="col-lg-7">
-    <!-- Results Summary Panel (Items 15, 17) -->
+    <!-- Results Summary Panel -->
     <div class="table-card" id="resultPanel" style="display:none">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex align-items-center gap-2">
-          <div class="text-primary"><?= svg_icon('dashboard', '', 20) ?></div>
-          <h6 class="fw-bold mb-0">Seating Generation Summary</h6>
+      <div id="simulationBanner" class="mb-3" style="display:none;"></div>
+
+      <!-- Single Plain Sentence Result -->
+      <div class="p-3 mb-3 rounded-3" style="background:#FAF8F5; border:1px solid var(--border,#D8CFBF);">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div id="resultSentence" style="font-family:var(--font-serif,'DM Serif Display',serif); font-size:1.75rem; color:var(--ink-text,#2B2E27); font-weight:600; line-height:1.2;">
+              —
+            </div>
+            <div id="resultSub" class="small text-muted mt-1">
+              All candidates seated conflict-free across designated rooms.
+            </div>
+          </div>
+          <div id="resultBadge"></div>
         </div>
-        <span class="status-pill status-upcoming" id="badgeStatus">
-          <span class="status-dot"></span>Conflict-Free
-        </span>
       </div>
 
-      <div id="simulationBanner" class="mb-3" style="display:none;"></div>
-      <div class="row g-3" id="summary"></div>
-      <div id="warnings" class="mt-3"></div>
+      <div id="warnings" class="mb-3"></div>
 
-      <div class="d-flex gap-2 mt-4 flex-wrap" id="actions" style="display:none!important">
+      <!-- Mini-map per hall -->
+      <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="fw-bold mb-0" style="color:var(--ink-text,#2B2E27);">Hall room maps</h6>
+          <span class="text-muted small" id="hallsCountLabel"></span>
+        </div>
+        <div id="miniMapsContainer" class="minimap-hall-container"></div>
+      </div>
+
+      <div class="d-flex gap-2 pt-3 border-top flex-wrap" id="actions">
         <a id="printLink" href="#" class="btn btn-primary-soft btn-sm" title="View Sheets">
-          <?= svg_icon('printer', 'me-1', 15) ?>View Sheets
+          <?= svg_icon('printer', 'me-1', 15) ?>View sheets
         </a>
-        <a id="exportLink" href="#" class="btn btn-outline-secondary btn-sm" style="border-radius:12px;" title="Export CSV">
+        <a id="exportLink" href="#" class="btn btn-outline-secondary btn-sm" style="border-radius:6px;" title="Export CSV">
           <?= svg_icon('download', 'me-1', 15) ?>Export CSV
         </a>
-        <a href="<?= htmlspecialchars(getenv('STUDENT_PORTAL_URL') ?: '../') ?>find" target="_blank" class="btn btn-outline-primary btn-sm" style="border-radius:12px;">
-          <?= svg_icon('box-arrow-up-right', 'me-1', 15) ?>Test in Student Portal ↗
+        <a href="<?= htmlspecialchars(getenv('STUDENT_PORTAL_URL') ?: '../') ?>find" target="_blank" class="btn btn-outline-secondary btn-sm" style="border-radius:6px;">
+          <?= svg_icon('box-arrow-up-right', 'me-1', 15) ?>Open student portal
         </a>
       </div>
     </div>
 
-    <!-- Friendly Placeholder / Empty State (Item 28) -->
+    <!-- Friendly Placeholder / Empty State -->
     <div class="table-card text-muted text-center p-5" id="placeholder">
       <div class="empty-state-icon mx-auto mb-3">
         <?= svg_icon('magic', '', 28) ?>
       </div>
-      <h6 class="fw-bold text-main">Ready to Allocate Seating</h6>
-      <p class="text-muted small mb-0">Select an exam session, configure bench capacity, and click <strong>Generate Seating Plan</strong>.</p>
+      <h6 class="fw-bold text-main">Ready to allocate seating</h6>
+      <p class="text-muted small mb-0">Select an exam session, configure bench capacity, and click <strong>Generate seating</strong>.</p>
     </div>
   </div>
 </div>
@@ -212,7 +215,7 @@ function recalcCustom() {
   const b = +document.getElementById('benchesPerRoom').value || 1;
   const s = +document.getElementById('studentsPerBench').value || 1;
   const total = r * b * s;
-  document.getElementById('customCalc').innerHTML = `Calculated Capacity: <b>${total.toLocaleString()} desks</b> across <b>${r.toLocaleString()} halls</b> (${b} rows × ${s} cols = ${b * s} desks/room)`;
+  document.getElementById('customCalc').innerHTML = `Calculated capacity: <b>${total.toLocaleString()} desks</b> across <b>${r.toLocaleString()} halls</b> (${b} rows × ${s} cols = ${b * s} desks/room)`;
 }
 
 function updateExamInfo() {
@@ -234,7 +237,7 @@ btn.addEventListener('click', async () => {
   const sel = document.getElementById('examSelect');
   const examId = sel.value;
   if (!examId) {
-    window.showToast('Please select an exam session first.', 'danger');
+    window.showToast('Select an exam session first.', 'danger');
     return;
   }
 
@@ -245,7 +248,6 @@ btn.addEventListener('click', async () => {
   const isAlternate = document.getElementById('spacingAlternate').checked;
   const isSimulate = document.getElementById('simulateOnly').checked;
 
-  // Confirmation popup before real generation (Item 13)
   if (!isSimulate) {
     if (!confirm('This will replace the existing arrangement for this exam. Continue?')) {
       return;
@@ -264,9 +266,8 @@ btn.addEventListener('click', async () => {
     payload.students_per_bench = +document.getElementById('studentsPerBench').value || 2;
   }
 
-  // Loading state on button (Item 14)
   btn.disabled = true;
-  label.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Allocating ${count > 0 ? Number(count).toLocaleString() + ' ' : ''}seats…`;
+  label.innerHTML = `Allocating ${count > 0 ? Number(count).toLocaleString() + ' ' : ''}seats…`;
 
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -282,19 +283,14 @@ btn.addEventListener('click', async () => {
     if (!res.ok) throw new Error(json.error || 'Generation failed');
     const d = json.data;
     
-    // Replace placeholder with results summary (Item 15)
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('resultPanel').style.display = 'block';
 
     const simBanner = document.getElementById('simulationBanner');
     if (d.simulated) {
-      // Clear label as PREVIEW ONLY (Item 17)
-      simBanner.innerHTML = `<div class="alert alert-warning py-2.5 px-3 rounded-3 border-warning d-flex align-items-center gap-2">
-        <span class="badge bg-warning text-dark fw-bold px-2 py-1">PREVIEW ONLY</span>
-        <div>
-          <strong class="text-warning-emphasis">PREVIEW ONLY — nothing saved to database.</strong>
-          <div class="small text-muted mt-0.5">Seating was calculated in-memory. Uncheck "Simulate in Memory" to save.</div>
-        </div>
+      simBanner.innerHTML = `<div class="p-2.5 rounded-3 border small d-flex align-items-center gap-2" style="background:#FFF9F0; border-color:#E2C8A8; color:#8A5416;">
+        <span class="badge" style="background:#E2C8A8; color:#4E310C; font-weight:700;">Preview only</span>
+        <span>Nothing saved to database. Seating was calculated in memory.</span>
       </div>`;
       simBanner.style.display = 'block';
     } else {
@@ -302,58 +298,111 @@ btn.addEventListener('click', async () => {
     }
 
     const sameCodeConflicts = d.same_exam_code_conflicts ?? d.same_paper_conflicts ?? 0;
-    const tiles = [
-      ['Students Seated', `${d.assigned.toLocaleString()} / ${d.total_students.toLocaleString()}`, '#eff6ff', '#1d4ed8'],
-      ['Halls Used', `${d.rooms_used.toLocaleString()} halls`, '#fff7ed', '#ea580c'],
-      ['Clashes Repaired', sameCodeConflicts === 0 ? '0 (Zero Clashes)' : `${sameCodeConflicts} conflicts`, sameCodeConflicts === 0 ? '#f1f5f9' : '#fef2f2', sameCodeConflicts === 0 ? '#0f172a' : '#ef4444'],
-      ['Benches Utilized', `${(d.benches_used || d.assigned).toLocaleString()} benches`, '#fffbeb', '#d97706'],
-      ['Exam Codes Handled', `${d.exam_codes_count || d.cohorts_count} codes (${d.departments_count} depts)`, '#eef2ff', '#6366f1'],
-      ['Engine Speed', `${d.execution_time_ms || 10} ms`, '#f8fafc', '#475569'],
-    ];
-
-    document.getElementById('summary').innerHTML = tiles.map(([t,v,bg,c]) =>
-      `<div class="col-6 col-md-4"><div class="p-3 rounded-3 text-center border" style="background:${bg}">
-        <div class="fw-bold fs-4" style="color:${c}">${v}</div><div class="small text-muted">${t}</div></div></div>`).join('');
     
+    // One plain sentence
+    const sentenceEl = document.getElementById('resultSentence');
+    sentenceEl.textContent = `${d.assigned.toLocaleString()} seated, ${sameCodeConflicts} clashes`;
+    if (sameCodeConflicts > 0) {
+      sentenceEl.style.color = 'var(--brand-red, #9C4632)';
+    } else {
+      sentenceEl.style.color = 'var(--ink-text, #2B2E27)';
+    }
+
+    const subEl = document.getElementById('resultSub');
+    if (d.unassigned > 0) {
+      subEl.textContent = `${d.unassigned.toLocaleString()} students unseated due to room capacity.`;
+    } else {
+      subEl.textContent = `Seated across ${d.rooms_used} hall${d.rooms_used === 1 ? '' : 's'}. Interleaved across branches.`;
+    }
+
+    const badgeEl = document.getElementById('resultBadge');
+    if (sameCodeConflicts === 0) {
+      badgeEl.innerHTML = `<span class="badge" style="background:rgba(139,154,110,0.2); color:#4F5C3B; border:1px solid #8B9A6E;">OK</span>`;
+    } else {
+      badgeEl.innerHTML = `<span class="badge" style="background:rgba(156,70,50,0.15); color:#9C4632; border:1px solid #9C4632;">Clash</span>`;
+    }
+
     let w = '';
     if (d.warnings && d.warnings.length) {
       d.warnings.forEach(msg => {
-        w += `<div class="alert alert-warning py-2 small">${msg}</div>`;
+        w += `<div class="p-2 rounded-2 small mb-1 border" style="background:#FFF9F0; border-color:#E2C8A8; color:#6A4414;">${msg}</div>`;
       });
     }
-    if (sameCodeConflicts === 0) {
-      w += `<div class="alert alert-primary py-2 small d-flex align-items-center gap-1.5">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        <div><b>Zero Conflicts!</b> No two adjacent students share the same exam code. Interleaved across academic years and departments.</div>
-      </div>`;
-    } else if (!isAlternate) {
-      w += `<div class="alert alert-danger py-2 small">
-        <div class="d-flex align-items-center gap-1.5 fw-bold">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          ${sameCodeConflicts} adjacent conflict(s) detected!
-        </div>
-        <div class="mt-1">This batch has an imbalanced paper mix or single paper.</div>
+    if (sameCodeConflicts > 0 && !isAlternate) {
+      w += `<div class="p-2 rounded-2 small mt-2 border" style="background:rgba(156,70,50,0.1); border-color:#9C4632; color:#9C4632;">
+        <b>${sameCodeConflicts} conflict(s) detected.</b> This batch has an imbalanced paper mix or single paper.
         <div class="mt-2">
-          <button type="button" class="btn btn-warning btn-sm" onclick="enableAlternateAndRegenerate()">
-            Enable Alternate Seating &amp; Re-run
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="enableAlternateAndRegenerate()">
+            Enable alternate seating and re-run
           </button>
         </div>
       </div>`;
     }
     document.getElementById('warnings').innerHTML = w;
 
-    const actions = document.getElementById('actions');
-    actions.style.cssText = '';
+    // Render Mini-maps per Hall
+    renderMiniMaps(d.halls || []);
+
     document.getElementById('printLink').href = 'print_plan.php?exam_id=' + examId;
     document.getElementById('exportLink').href = '../api/export.php?exam_id=' + examId;
     
-    window.showToast(`Seating plan generated successfully! ${d.assigned} students seated conflict-free.`, 'success');
+    window.showToast(`Seating generated: ${d.assigned} seated, ${sameCodeConflicts} clashes.`, 'success');
   } catch (e) {
     window.showToast(e.message, 'danger');
   }
   btn.disabled = false;
-  label.innerHTML = '<?= svg_icon('magic', '', 18) ?> Generate Seating Plan';
+  label.innerHTML = '<?= svg_icon('magic', '', 18) ?> Generate seating';
 });
+
+function renderMiniMaps(halls) {
+  const container = document.getElementById('miniMapsContainer');
+  const countLabel = document.getElementById('hallsCountLabel');
+  if (!container) return;
+
+  if (!halls || halls.length === 0) {
+    container.innerHTML = '<div class="text-muted small">No hall layouts to preview.</div>';
+    countLabel.textContent = '';
+    return;
+  }
+
+  countLabel.textContent = `${halls.length} hall${halls.length === 1 ? '' : 's'}`;
+
+  let html = '';
+  halls.forEach(hall => {
+    // Map of row:col => seat
+    const seatMap = {};
+    if (hall.seats) {
+      hall.seats.forEach(s => {
+        seatMap[`${s.row}:${s.col}`] = s;
+      });
+    }
+
+    html += `<div class="hall-minimap-card">
+      <div class="minimap-title">
+        <span>Hall ${hall.room_no}</span>
+        <span class="text-muted small fw-normal">${hall.seated} / ${hall.rows * hall.cols}</span>
+      </div>
+      <div class="hall-board-indicator">Front · Board</div>
+      <div class="minimap-grid">`;
+
+    for (let r = 1; r <= hall.rows; r++) {
+      html += `<div class="minimap-row">`;
+      for (let c = 1; c <= hall.cols; c++) {
+        const s = seatMap[`${r}:${c}`];
+        if (s) {
+          html += `<div class="minimap-seat-box occupied" title="Row ${r}, Col ${c}: ${s.roll} (${s.code})"></div>`;
+        } else {
+          html += `<div class="minimap-seat-box empty" title="Row ${r}, Col ${c}: Empty"></div>`;
+        }
+      }
+      html += `</div>`;
+    }
+
+    html += `</div></div>`;
+  });
+
+  container.innerHTML = html;
+}
 
 function enableAlternateAndRegenerate() {
   document.getElementById('spacingAlternate').checked = true;

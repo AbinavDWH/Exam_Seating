@@ -1,6 +1,6 @@
 <?php
 /**
- * Clean inline SVG icon library for ExamSeat Admin
+ * Clean inline SVG icon library for DeskMap Admin
  * Guaranteed to load instantly with zero external font/CDN dependencies.
  */
 function svg_icon(string $name, string $class = '', int $size = 20, float $strokeWidth = 2): string {

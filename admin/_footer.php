@@ -2,10 +2,9 @@
   </main>
 </div>
 
-<!-- Global Toast Container (Requirement 17) -->
+<!-- Global Toast Container -->
 <div id="toastContainer" class="toast-container-custom"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 window.showToast = function(message, type = 'success') {
   const container = document.getElementById('toastContainer');
@@ -64,13 +63,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const toastParam = urlParams.get('toast');
   if (toastParam) {
     if (toastParam === 'deleted') {
-      window.showToast('Exam session was successfully deleted.', 'danger');
+      window.showToast('Exam deleted', 'danger');
     } else if (toastParam === 'updated' || toastParam === 'saved') {
-      window.showToast('Exam session updated successfully.', 'success');
+      window.showToast('Changes saved', 'success');
     } else if (toastParam === 'created') {
-      window.showToast('New exam session created successfully.', 'success');
+      window.showToast('Exam created', 'success');
     } else if (toastParam === 'generated') {
-      window.showToast('Seating allocation generated successfully.', 'success');
+      window.showToast('Seating generated', 'success');
     } else {
       const decoded = decodeURIComponent(toastParam);
       const isSuccess = /saved|success|added|updated|created/i.test(decoded);

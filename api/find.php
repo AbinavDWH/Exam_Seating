@@ -25,7 +25,7 @@ if ($dob === '') {
 $clientIp = get_client_ip();
 $rollKey = 'search_roll:' . substr($roll, 0, 36);
 if (!check_ip_rate_limit($rollKey, 30, 60, $clientIp) || !check_ip_rate_limit('seat_search_ip', 300, 60, $clientIp)) {
-    json_response(['error' => 'Too many search requests. Please wait a moment before searching again.'], 429);
+    json_response(['error' => 'Too many tries. Wait a minute and try again.'], 429);
 }
 record_ip_failed_attempt($rollKey, 30, 60, 60, $clientIp);
 record_ip_failed_attempt('seat_search_ip', 300, 60, 60, $clientIp);
@@ -38,7 +38,7 @@ $stuCheck->execute([$roll]);
 $actualDob = $stuCheck->fetchColumn();
 
 // Unified error message to prevent roll-number enumeration/guessing
-$noMatchMsg = 'No student found matching the provided roll number and date of birth.';
+$noMatchMsg = 'We couldn’t find that roll number and date of birth. Check both and try again.';
 
 if ($actualDob === false || $actualDob === null || trim((string)$actualDob) === '' || strtotime((string)$actualDob) === false || strtotime($dob) === false) {
     json_response(['error' => $noMatchMsg], 404);
@@ -72,7 +72,7 @@ $allStmt->execute([$roll]);
 $allExams = $allStmt->fetchAll();
 
 if (empty($allExams)) {
-    json_response(['error' => "No seat found for roll number '{$roll}'"], 404);
+    json_response(['error' => $noMatchMsg], 404);
 }
 
 $targetExamId = $examId > 0 ? $examId : (int)$allExams[0]['exam_id'];

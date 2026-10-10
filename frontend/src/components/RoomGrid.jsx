@@ -1,15 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, Users, Info } from 'lucide-react';
-import { deptColor, deptTextColor, shortDept } from '../api/client.js';
+import { useEffect, useMemo, useRef } from 'react';
+import { LogIn, Square } from 'lucide-react';
 
-export default function RoomGrid({ room, seats, highlightRoll }) {
-  const [activeSeat, setActiveSeat] = useState(null);
+/**
+ * RoomGrid - Ink on Paper Seating Map
+ * - Front of hall clearly marked with Board and Entrance Door
+ * - Bench numbers explicitly numbered
+ * - ONLY the student's own seat is highlighted in Peach (#FFBDA3)
+ * - Everyone else's seat is grey, anonymous, and pattern-coded
+ * - Hand-drawn SVG brush circle animates drawing around the student's seat (< 1s, reduced motion respected)
+ */
+export default function RoomGrid({ room, seats = [], highlightRoll }) {
   const yourSeatRef = useRef(null);
 
   const benchesCount = +room.benches_count || +room.rows_count || 1;
   const perBench = +room.students_per_bench || +room.cols_count || 2;
 
-  // Group columns into 2-seat bench units (Items 11, 14, 15)
+  // Group columns into 2-seat bench pairs
   const benchPairs = useMemo(() => {
     const pairs = [];
     for (let c = 1; c <= perBench; c += 2) {
@@ -22,39 +28,11 @@ export default function RoomGrid({ room, seats, highlightRoll }) {
     return pairs;
   }, [perBench]);
 
-  // Split benches into Left Block and Right Block around walking aisle (Item 12)
   const leftBenchCount = Math.max(1, Math.ceil(benchPairs.length / 2));
-  const leftBenches = useMemo(
-    () => benchPairs.slice(0, leftBenchCount),
-    [benchPairs, leftBenchCount]
-  );
-  const rightBenches = useMemo(
-    () => benchPairs.slice(leftBenchCount),
-    [benchPairs, leftBenchCount]
-  );
+  const leftBenches = useMemo(() => benchPairs.slice(0, leftBenchCount), [benchPairs, leftBenchCount]);
+  const rightBenches = useMemo(() => benchPairs.slice(leftBenchCount), [benchPairs, leftBenchCount]);
 
-  // Group rows into sections of 4 rows (e.g. Rows 1–4, 5–8) (Item 13)
-  const SECTION_SIZE = 4;
-  const sections = useMemo(() => {
-    const secs = [];
-    for (let r = 1; r <= benchesCount; r += SECTION_SIZE) {
-      const startRow = r;
-      const endRow = Math.min(r + SECTION_SIZE - 1, benchesCount);
-      const rows = [];
-      for (let rowIdx = startRow; rowIdx <= endRow; rowIdx++) {
-        rows.push(rowIdx);
-      }
-      secs.push({
-        title: `ROWS ${startRow} – ${endRow}`,
-        startRow,
-        endRow,
-        rows,
-      });
-    }
-    return secs;
-  }, [benchesCount]);
-
-  // Fast O(1) lookup of seats by row:col
+  // Fast map lookup
   const seatMap = useMemo(() => {
     const map = new Map();
     for (const s of seats) {
@@ -63,12 +41,7 @@ export default function RoomGrid({ room, seats, highlightRoll }) {
     return map;
   }, [seats]);
 
-  const branches = useMemo(
-    () => [...new Set(seats.map((s) => s.branch).filter(Boolean))].sort(),
-    [seats]
-  );
-
-  // Auto-scroll to "YOUR SEAT" when page opens (Item 16)
+  // Auto-scroll to student's seat
   useEffect(() => {
     if (yourSeatRef.current) {
       const timer = setTimeout(() => {
@@ -77,260 +50,153 @@ export default function RoomGrid({ room, seats, highlightRoll }) {
           block: 'center',
           inline: 'center',
         });
-      }, 350);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [highlightRoll]);
 
-  // Set default active seat to user's seat if found
-  useEffect(() => {
-    if (highlightRoll) {
-      const me = seats.find(
-        (s) => s.roll_no.toUpperCase() === highlightRoll.toUpperCase()
-      );
-      if (me) setActiveSeat(me);
-    }
-  }, [highlightRoll, seats]);
-
-  // Render individual seat square inside bench
-  const renderSeat = (r, c, side) => {
+  const renderSeat = (r, c, sideLabel, benchNumber) => {
     const s = seatMap.get(`${r}:${c}`);
+    const isMe = highlightRoll && s && s.roll_no.toUpperCase() === highlightRoll.toUpperCase();
 
-    // Empty desk: white square with light grey dashed border and grey number (Item 4, 6)
+    // 1. Empty desk: off-white with dashed border
     if (!s) {
       return (
         <div
           key={c}
-          className="cinema-seat empty"
-          title={`Row ${r}, Col ${c} (${side} · Empty)`}
-          aria-label={`Row ${r}, Col ${c} (Empty desk)`}
+          className="seat-box seat-empty"
+          title={`Row ${r}, Col ${c} (${sideLabel}) · Empty desk`}
+          aria-label={`Row ${r}, Col ${c}, Empty desk`}
         >
-          <span className="seat-num-text">{c}</span>
+          <span className="seat-sub-num">{c}</span>
         </div>
       );
     }
 
-    const isMe =
-      highlightRoll &&
-      s.roll_no.toUpperCase() === highlightRoll.toUpperCase();
+    // 2. Student's own allocated seat: Peach with animated brush circle
+    if (isMe) {
+      return (
+        <div
+          key={c}
+          ref={yourSeatRef}
+          className="seat-box seat-mine"
+          title={`Your allocated seat: Bench ${benchNumber}, ${sideLabel} (Row ${r}, Col ${c})`}
+          aria-label={`Your seat: Bench ${benchNumber}, ${sideLabel}, Row ${r}, Column ${c}`}
+        >
+          {/* Animated Hand-drawn Brush Circle Reveal */}
+          <svg className="seat-reveal-circle" viewBox="0 0 100 100" aria-hidden="true">
+            <path
+              d="M 50 7 C 76 6, 95 24, 94 50 C 93 76, 74 94, 49 93 C 23 92, 6 72, 7 48 C 8 22, 29 6, 54 7 C 69 8, 84 14, 92 27"
+              fill="none"
+              stroke="#2B2E27"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="seat-star" aria-hidden="true">★</span>
+          <span className="seat-label-text">YOU</span>
+        </div>
+      );
+    }
 
-    // Show last 4 digits (Item 6)
-    const rollDigits = s.roll_no.length >= 4 ? s.roll_no.slice(-4) : s.roll_no;
-    const dColor = deptColor(s.branch);
-
-    // Occupied seat: white square with colored border and colored number; solid orange ONLY for Your Seat (Items 1, 2, 3)
+    // 3. Other students' seats: Grey, anonymous, pattern-coded (diagonal hash)
     return (
-      <button
+      <div
         key={c}
-        ref={isMe ? yourSeatRef : null}
-        type="button"
-        className={`cinema-seat occupied ${isMe ? 'you' : ''}`}
-        style={{
-          '--dept': dColor,
-          '--dept-text': deptTextColor(s.branch),
-        }}
-        title={`${s.roll_no} (${s.branch}) · Row ${r}, Col ${c} (${side})`}
-        aria-label={`${isMe ? 'Your Seat: ' : ''}${s.roll_no}, Department: ${s.branch}, Row ${r}, Column ${c}`}
-        onClick={() => setActiveSeat(s)}
-        onMouseEnter={() => setActiveSeat(s)}
+        className="seat-box seat-other-occupied"
+        title={`Row ${r}, Col ${c} (${sideLabel}) · Occupied desk`}
+        aria-label={`Row ${r}, Col ${c}, Occupied desk`}
       >
-        <span className="seat-num-text">{rollDigits}</span>
-      </button>
+        <span className="seat-pattern-icon" aria-hidden="true">
+          <Square size={10} strokeWidth={2.5} />
+        </span>
+      </div>
     );
   };
 
-  // Render bench unit containing 2 seats (Items 11, 14, 15)
   const renderBench = (r, b) => {
-    const leftSeat = renderSeat(r, b.leftCol, 'Seat 1 Left');
-    const rightSeat = b.rightCol ? (
-      renderSeat(r, b.rightCol, 'Seat 2 Right')
-    ) : (
-      <div key={`empty-ph-${b.benchCol}`} className="cinema-seat placeholder" aria-hidden="true" />
-    );
-
+    const benchNumber = (r - 1) * benchPairs.length + b.benchCol;
     return (
-      <div key={b.benchCol} className="bench-unit" title={`Row ${r}, Bench ${b.benchCol}`}>
-        <div className="bench-unit-seats">
-          {leftSeat}
-          {rightSeat}
+      <div key={b.benchCol} className="bench-cell">
+        <div className="bench-seats-pair">
+          {renderSeat(r, b.leftCol, 'Left', benchNumber)}
+          {b.rightCol ? (
+            renderSeat(r, b.rightCol, 'Right', benchNumber)
+          ) : (
+            <div className="seat-box seat-placeholder" aria-hidden="true" />
+          )}
         </div>
-        <span className="bench-unit-label">B{b.benchCol}</span>
+        <div className="bench-indicator">Bench {benchNumber}</div>
       </div>
     );
   };
 
   return (
-    <div className="room-map-card cinema-card card-enter">
-      {/* Centered hall title + filled chip above the map */}
-      <div className="hall-cinema-header">
-        <h3 className="hall-cinema-title">
-          Hall {room.room_no} · {room.block}
-        </h3>
-        <div className="hall-cinema-sub">
-          <span className="pill-neutral">
-            <Users size={13} /> {seats.length} / {benchesCount * perBench} seats filled
-          </span>
+    <div className="room-map-wrapper">
+      {/* Front of Hall: Blackboard and Entrance Door */}
+      <div className="hall-front-stage">
+        <div className="hall-door-marker" title="Room Entrance Door">
+          <LogIn size={15} />
+          <span>Door</span>
         </div>
+        <div className="hall-board-marker" title="Classroom Blackboard / Whiteboard">
+          <div className="hall-board-chalk" />
+          <span>Board &amp; Invigilator Desk</span>
+        </div>
+        <div className="hall-door-spacer" />
       </div>
 
-      {/* Mobile scroll hint (Item 17) */}
-      <div className="mobile-scroll-hint">
-        <ArrowLeftRight size={14} /> Swipe horizontally to view all benches in hall
-      </div>
+      {/* Seating Layout Grid */}
+      <div className="map-scroll-area">
+        <div className="hall-grid-container" role="grid" aria-label={`Seating layout for hall ${room.room_no}`}>
+          {Array.from({ length: benchesCount }, (_, i) => i + 1).map((r) => (
+            <div key={r} className="hall-grid-row">
+              <span className="row-pill">Row {r}</span>
 
-      {/* Centered Scrollable Theater Grid (Items 11, 12, 17) */}
-      <div className="grid-scroll-wrap">
-        <div className="cinema-grid-center" role="grid" aria-label={`Seating layout for hall ${room.room_no}`}>
-          {/* Column Numbers above each block aligned to seats (Item 14) */}
-          <div className="cinema-col-header-row" aria-hidden="true">
-            <span className="row-num-spacer" />
-            <div className="seat-block">
-              {leftBenches.map((b) => (
-                <div key={b.benchCol} className="bench-header-unit">
-                  <span className="col-num-label">{b.leftCol}</span>
-                  {b.rightCol ? (
-                    <span className="col-num-label">{b.rightCol}</span>
-                  ) : (
-                    <span className="col-num-label placeholder" />
-                  )}
+              {/* Left Wing Benches */}
+              <div className="wing-block">
+                {leftBenches.map((b) => renderBench(r, b))}
+              </div>
+
+              {/* Center Walking Aisle */}
+              {rightBenches.length > 0 && (
+                <div className="aisle-spacer" aria-hidden="true">
+                  <span>Aisle</span>
                 </div>
-              ))}
-            </div>
-            {rightBenches.length > 0 && <div className="walking-aisle" />}
-            {rightBenches.length > 0 && (
-              <div className="seat-block">
-                {rightBenches.map((b) => (
-                  <div key={b.benchCol} className="bench-header-unit">
-                    <span className="col-num-label">{b.leftCol}</span>
-                    {b.rightCol ? (
-                      <span className="col-num-label">{b.rightCol}</span>
-                    ) : (
-                      <span className="col-num-label placeholder" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <span className="row-num-spacer" />
-          </div>
+              )}
 
-          {/* Sections of Rows with Divider Lines (Items 12, 13) */}
-          {sections.map((section, secIdx) => (
-            <div key={secIdx} className="cinema-section-group">
-              {/* Centered section label with thin divider line (Item 13) */}
-              <div className="section-divider-title" aria-label={`Section ${section.title}`}>
-                <span>{section.title}</span>
-              </div>
+              {/* Right Wing Benches */}
+              {rightBenches.length > 0 && (
+                <div className="wing-block">
+                  {rightBenches.map((b) => renderBench(r, b))}
+                </div>
+              )}
 
-              {/* Rows inside section */}
-              <div className="cinema-section-rows">
-                {section.rows.map((r) => (
-                  <div key={r} className="cinema-row-container">
-                    {/* Row number at left (Item 13) */}
-                    <span className="row-num-label">{r}</span>
-
-                    {/* Left Block of Bench Units (Item 11) */}
-                    <div className="seat-block">
-                      {leftBenches.map((b) => renderBench(r, b))}
-                    </div>
-
-                    {/* Walking Aisle Gap (48–56px) (Item 12) */}
-                    {rightBenches.length > 0 && (
-                      <div className="walking-aisle" aria-hidden="true" title="Walking aisle" />
-                    )}
-
-                    {/* Right Block of Bench Units (Item 11) */}
-                    {rightBenches.length > 0 && (
-                      <div className="seat-block">
-                        {rightBenches.map((b) => renderBench(r, b))}
-                      </div>
-                    )}
-
-                    {/* Row number at right for symmetry (Item 13) */}
-                    <span className="row-num-label">{r}</span>
-                  </div>
-                ))}
-              </div>
+              <span className="row-pill">Row {r}</span>
             </div>
           ))}
-
-          {/* Flat Matte Bar at bottom with caption (Items 7, 8, 10) */}
-          <div className="cinema-screen-wrap" aria-label="Front of examination hall">
-            <div className="cinema-screen-bar" />
-            <div className="cinema-screen-caption">FRONT · INVIGILATOR DESK</div>
-          </div>
-
-          {/* Centered Legend below screen with outlined seat chips (Item 5) */}
-          <div className="cinema-legend-bottom" aria-label="Room seating legend">
-            <div className="legend-items-row">
-              {branches.map((b) => (
-                <span key={b} className="legend-item">
-                  <span
-                    className="legend-seat-outline"
-                    style={{
-                      '--dept': deptColor(b),
-                      borderColor: deptColor(b),
-                      color: deptTextColor(b),
-                    }}
-                  >
-                    {shortDept(b)}
-                  </span>
-                  <span>{b}</span>
-                </span>
-              ))}
-              <span className="legend-item">
-                <span className="legend-seat-outline empty" />
-                <span>Empty Desk</span>
-              </span>
-              <span className="legend-item">
-                <span className="legend-seat-outline your-seat" />
-                <b>Your Seat</b>
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Interactive Tooltip / Peek Card on Hover & Tap (Item 5) */}
-      {activeSeat && (
-        <div className="seat-peek card-enter" role="status" aria-live="polite">
-          <Info size={16} color="var(--text-subtle)" />
-          {activeSeat.exam_code && (
-            <span
-              className="pill-neutral"
-              style={{ background: '#ffffff', fontWeight: 700 }}
-            >
-              Paper: {activeSeat.exam_code}
-            </span>
-          )}
-          <span
-            className="dept-pill-tag"
-            style={{
-              '--dept': deptColor(activeSeat.branch),
-              borderColor: deptColor(activeSeat.branch),
-              color: deptTextColor(activeSeat.branch),
-            }}
-          >
-            {activeSeat.branch}
+      {/* Clean Calm Legend */}
+      <div className="room-map-legend">
+        <div className="legend-entry">
+          <span className="legend-chip legend-chip-mine">
+            <span className="legend-mini-circle" />
+            ★
           </span>
-          <b style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-            {activeSeat.roll_no}
-          </b>
-          {activeSeat.name && (
-            <span style={{ color: 'var(--text)' }}>({activeSeat.name})</span>
-          )}
-          <span style={{ color: 'var(--text-subtle)', marginLeft: 'auto' }}>
-            Desk <b>Row {activeSeat.row_num}</b>, <b>Col {activeSeat.col_num}</b>
-            {activeSeat.seat_index ? ` · Seat ${activeSeat.seat_index}` : ''}
-          </span>
-          {highlightRoll &&
-            activeSeat.roll_no.toUpperCase() === highlightRoll.toUpperCase() && (
-              <span className="your-seat-badge-pill">
-                ★ THIS IS YOUR SEAT
-              </span>
-            )}
+          <span>Your seat (Peach)</span>
         </div>
-      )}
+        <div className="legend-entry">
+          <span className="legend-chip legend-chip-other" />
+          <span>Occupied desk (Anonymous)</span>
+        </div>
+        <div className="legend-entry">
+          <span className="legend-chip legend-chip-empty" />
+          <span>Empty desk</span>
+        </div>
+      </div>
     </div>
   );
 }

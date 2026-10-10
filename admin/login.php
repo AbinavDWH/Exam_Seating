@@ -11,47 +11,49 @@ $error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verify_csrf();
     if (!check_login_rate_limit('admin_login')) {
-        $error = 'Too many failed login attempts. Please wait 15 minutes before retrying.';
-    } else {
-        $username = trim($_POST['username'] ?? '');
-        $password = (string)($_POST['password'] ?? '');
+        if (!check_login_rate_limit('admin_login')) {
+            $error = 'Too many tries. Wait a minute and try again.';
+        } else {
+            $username = trim($_POST['username'] ?? '');
+            $password = (string)($_POST['password'] ?? '');
 
-        $stmt = db()->prepare("SELECT * FROM admins WHERE username = ?");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch();
+            $stmt = db()->prepare("SELECT * FROM admins WHERE username = ?");
+            $stmt->execute([$username]);
+            $admin = $stmt->fetch();
 
-        if ($admin && password_verify($password, $admin['password_hash'])) {
-            reset_login_rate_limit('admin_login');
-            session_regenerate_id(true);
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_user'] = $admin['username'];
+            if ($admin && password_verify($password, $admin['password_hash'])) {
+                reset_login_rate_limit('admin_login');
+                session_regenerate_id(true);
+                $_SESSION['admin_id'] = $admin['id'];
+                $_SESSION['admin_user'] = $admin['username'];
 
-            if (!empty($_POST['remember'])) {
-                // Extend session cookie lifetime to 30 days if remember is checked
-                $params = session_get_cookie_params();
-                setcookie(
-                    session_name(),
-                    session_id(),
-                    time() + (30 * 86400),
-                    $params['path'],
-                    $params['domain'],
-                    $params['secure'],
-                    $params['httponly']
-                );
-            }
+                if (!empty($_POST['remember'])) {
+                    // Extend session cookie lifetime to 30 days if remember is checked
+                    $params = session_get_cookie_params();
+                    setcookie(
+                        session_name(),
+                        session_id(),
+                        time() + (30 * 86400),
+                        $params['path'],
+                        $params['domain'],
+                        $params['secure'],
+                        $params['httponly']
+                    );
+                }
 
-            if (!empty($admin['must_change_password']) || password_verify('Admin@123', $admin['password_hash'])) {
-                $_SESSION['must_change_password'] = true;
-                header('Location: change_password.php');
+                if (!empty($admin['must_change_password']) || password_verify('Admin@123', $admin['password_hash'])) {
+                    $_SESSION['must_change_password'] = true;
+                    header('Location: change_password.php');
+                    exit;
+                }
+
+                header('Location: index.php');
                 exit;
             }
 
-            header('Location: index.php');
-            exit;
+            record_failed_login('admin_login');
+            $error = 'We couldn’t sign you in. Check your username and password and try again.';
         }
-
-        record_failed_login('admin_login');
-        $error = 'Wrong username or password. Please try again.';
     }
 }
 ?>
@@ -60,12 +62,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign In · ExamSeat Administration</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<title>Sign in · DeskMap</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/fonts.css">
 <link href="assets/admin.css" rel="stylesheet">
 <style>
   body {
@@ -73,54 +73,46 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Soft sage radial glow over deep olive charcoal #23261F */
-    background:
-      radial-gradient(circle at 50% 32%, rgba(139, 154, 110, 0.22) 0%, transparent 48%),
-      radial-gradient(circle at 20% 80%, rgba(94, 122, 153, 0.12) 0%, transparent 42%),
-      #23261F;
-    background-color: #23261F;
+    background-color: var(--admin-bg, #EAE2D6);
     margin: 0;
     padding: 24px 16px;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    color: #2B2E27;
+    color: var(--text-main, #2B2E27);
   }
 
   .login-wrapper {
     width: 100%;
-    max-width: 420px;
+    max-width: 400px;
     margin: 0 auto;
   }
 
-  /* Crisp white card on deep background */
   .login-card {
     width: 100%;
     background: #ffffff;
-    border-radius: 20px;
-    border: 1px solid #EAE2D6;
-    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    border: 1px solid #D8CFBF;
+    box-shadow: none;
     padding: 36px 32px 32px;
   }
 
-  /* Centered brand logo tile in primary brand sage #8B9A6E */
-  .brand-logo-tile {
-    width: 56px;
-    height: 56px;
-    margin: 0 auto 18px;
-    border-radius: 14px;
-    background: #8B9A6E;
-    display: grid;
-    place-items: center;
-    color: #F7F2EB;
-    box-shadow: none;
+  .login-logo-wrap {
+    text-align: center;
+    margin-bottom: 20px;
   }
 
-  /* Title and lighter subtitle */
+  .login-logo-img {
+    width: 96px;
+    height: auto;
+    display: inline-block;
+  }
+
   .login-title {
-    font-size: 1.45rem;
-    font-weight: 800;
-    letter-spacing: -0.025em;
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.65rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
     color: #2B2E27;
-    margin-bottom: 6px;
+    margin: 0 0 6px;
     text-align: center;
   }
 
@@ -367,26 +359,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 <div class="login-wrapper">
   <div class="login-card">
     <!-- Centered Brand Logo & Headings -->
-    <div class="brand-logo-tile" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
-        <rect x="4" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="10" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="16" y="4" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="4" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="10" y="10" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="16" y="10" width="4" height="4" rx="1" fill="currentColor"/>
-        <rect x="4" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="10" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-        <rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" fill-opacity="0.35"/>
-      </svg>
+    <div class="login-logo-wrap">
+      <img src="assets/deskmap-full.svg" alt="DeskMap" class="login-logo-img">
     </div>
-    <h1 class="login-title">ExamSeat Administration</h1>
-    <p class="login-subtitle">University Examination &amp; Seating Portal</p>
+    <h1 class="login-title">Sign in to DeskMap</h1>
+    <p class="login-subtitle">University examination seating portal</p>
 
     <!-- Error Alert Box -->
     <?php if ($error): ?>
       <div class="login-error-alert" role="alert">
-        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span><?= htmlspecialchars($error) ?></span>
       </div>
     <?php endif; ?>

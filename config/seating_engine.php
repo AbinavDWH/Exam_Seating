@@ -1,6 +1,6 @@
 <?php
 /**
- * ExamSeat Seating Engine — High Performance Scalable Engine
+ * DeskMap Seating Engine — High Performance Scalable Engine
  * Automatically generates fair, conflict-free seating plans for university examinations.
  * 
  * Supports:
@@ -512,6 +512,38 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
     $uniqueSemesters = count(array_unique(array_column($students, 'semester')));
     $uniqueCodes = count($cohortList);
 
+    $seatsByRoom = [];
+    foreach ($seats as $s) {
+        $rid = (int)$s['room_id'];
+        $seatsByRoom[$rid][] = [
+            'row' => (int)$s['row_num'],
+            'col' => (int)$s['col_num'],
+            'bench_no' => (int)$s['bench_no'],
+            'seat_index' => (int)$s['seat_index'],
+            'code' => $s['exam_code'] ?? '',
+            'roll' => $s['roll_no'] ?? '',
+            'branch' => $s['branch'] ?? '',
+        ];
+    }
+    $hallsSummary = [];
+    $hallsCount = 0;
+    foreach ($rooms as $r) {
+        $rid = (int)$r['id'];
+        if (isset($seatsByRoom[$rid])) {
+            $hallsSummary[] = [
+                'id' => $rid,
+                'room_no' => $r['room_no'],
+                'block' => $r['block'],
+                'rows' => (int)$r['rows_count'],
+                'cols' => (int)$r['cols_count'],
+                'seated' => count($seatsByRoom[$rid]),
+                'seats' => $seatsByRoom[$rid],
+            ];
+            $hallsCount++;
+            if ($hallsCount >= 40) break;
+        }
+    }
+
     return [
         'total_students'           => $totalStudents,
         'assigned'                 => count($seats),
@@ -532,5 +564,6 @@ function generateSeating(PDO $pdo, int $examId, ?array $options = null): array {
         'warnings'                 => $warnings,
         'simulated'                => $simulate,
         'spacing'                  => $spacing,
+        'halls'                    => $hallsSummary,
     ];
 }

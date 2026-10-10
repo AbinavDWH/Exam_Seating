@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         if ($id <= 0) {
-            header('Location: rooms.php?toast=' . urlencode('Invalid hall ID specified'));
+            header('Location: rooms.php?toast=' . urlencode('Invalid hall ID'));
             exit;
         }
 
@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seatCount = (int)$chkStmt->fetchColumn();
 
         if ($seatCount > 0 && empty($_POST['confirm_unseat'])) {
-            header('Location: rooms.php?toast=' . urlencode("Hall has {$seatCount} seated students. You must confirm un-seating before deleting."));
+            header('Location: rooms.php?toast=' . urlencode("Hall has {$seatCount} seated students. Confirm un-seating before deleting."));
             exit;
         }
 
@@ -28,14 +28,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $delSeats = $pdo->prepare("DELETE FROM seating WHERE room_id = ?");
             $delSeats->execute([$id]);
-            $seatCount = $delSeats->rowCount();
-
             $delRoom = $pdo->prepare("DELETE FROM rooms WHERE id = ?");
             $delRoom->execute([$id]);
             $pdo->commit();
 
-            $msg = 'Hall deleted successfully' . ($seatCount > 0 ? " (cleared {$seatCount} active seat allocations)" : '');
-            header('Location: rooms.php?toast=' . urlencode($msg));
+            header('Location: rooms.php?toast=' . urlencode('Hall deleted'));
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -47,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0) {
             $pdo->prepare("UPDATE rooms SET active = 1 - active WHERE id = ?")->execute([$id]);
         }
-        header('Location: rooms.php?toast=' . urlencode('Hall status updated successfully'));
+        header('Location: rooms.php?toast=' . urlencode('Hall updated'));
         exit;
     } elseif ($action === 'batch') {
         $count = max(1, min(5000, (int)($_POST['batch_rooms'] ?? 1)));
@@ -75,11 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ins->execute([$rNo, $block, $cap, $rows, $cols]);
             }
             $pdo->commit();
-            header('Location: rooms.php?toast=' . urlencode('Successfully provisioned ' . number_format($count) . ' exam halls'));
+            header('Location: rooms.php?toast=' . urlencode('Halls created'));
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            header('Location: rooms.php?toast=' . urlencode('Batch hall creation failed: ' . $e->getMessage()));
+            header('Location: rooms.php?toast=' . urlencode('Batch creation failed: ' . $e->getMessage()));
             exit;
         }
     } else {
@@ -103,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            cols_count = excluded.cols_count,
                            active = 1")
             ->execute([$roomNo, $block, $cap, $rows, $cols]);
-        header('Location: rooms.php?toast=' . urlencode('Hall layout saved successfully'));
+        header('Location: rooms.php?toast=' . urlencode('Hall saved'));
         exit;
     }
 }
@@ -111,8 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Rooms';
 require __DIR__ . '/_header.php';
 
+$perPage = max(10, min(100, (int)($_GET['per_page'] ?? 25)));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 50;
 $offset = ($page - 1) * $perPage;
 
 $q = trim($_GET['q'] ?? '');
@@ -137,7 +134,7 @@ $totalCap = (int)$pdo->query("SELECT IFNULL(SUM(capacity), 0) FROM rooms WHERE a
 $countStmt = $pdo->prepare("SELECT COUNT(*) FROM rooms r $whereSql");
 $countStmt->execute($params);
 $filteredCount = (int)$countStmt->fetchColumn();
-$totalPages = ceil($filteredCount / $perPage);
+$totalPages = max(1, (int)ceil($filteredCount / $perPage));
 
 $query = "
     SELECT r.*, COALESCE(occ.occupied, 0) AS occupied
@@ -152,27 +149,26 @@ $stmt->execute($params);
 $rooms = $stmt->fetchAll();
 ?>
 
-<!-- Page Header with Separated Top-Right Stats (Point 11) -->
 <div class="page-header">
   <div>
     <h1 class="page-title">
       <?= svg_icon('building', 'text-primary', 26) ?>
-      Exam Halls &amp; Desk Layout
+      Exam Halls
     </h1>
     <div class="page-subtitle">
-      <span>Configure classroom dimensions, bench capacities, and campus block allocations</span>
+      <span>Configure classroom dimensions and bench capacities</span>
     </div>
   </div>
   <div class="d-flex gap-3 flex-wrap">
     <div class="stat-pill px-3 py-2 text-start" style="min-width: 150px;">
-      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Exam Halls</span>
-      <b style="font-size: 1.25rem; color: #0f172a; margin-top: 2px;"><?= number_format($totalRooms) ?></b>
-      <span class="text-muted small" style="font-size: 0.76rem;"><?= number_format($activeCount) ?> Active</span>
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Total halls</span>
+      <b style="font-size: 1.25rem; color: #2B2E27; margin-top: 2px;"><?= number_format($totalRooms) ?></b>
+      <span class="text-muted small" style="font-size: 0.76rem;"><?= number_format($activeCount) ?> active</span>
     </div>
     <div class="stat-pill px-3 py-2 text-start" style="min-width: 150px;">
-      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Desks Capacity</span>
-      <b style="font-size: 1.25rem; color: #ea580c; margin-top: 2px;"><?= number_format($totalCap) ?></b>
-      <span class="text-muted small" style="font-size: 0.76rem;">Active Seats</span>
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Desk capacity</span>
+      <b style="font-size: 1.25rem; color: #2B2E27; margin-top: 2px;"><?= number_format($totalCap) ?></b>
+      <span class="text-muted small" style="font-size: 0.76rem;">active desks</span>
     </div>
   </div>
 </div>
@@ -180,14 +176,14 @@ $rooms = $stmt->fetchAll();
 <div class="row g-4">
   <!-- Left Side: Hall Forms -->
   <div class="col-lg-5">
-    <!-- Single Room Card with Mini Preview Grid (Points 13, 14, 15, 23, 24) -->
+    <!-- Single Room Card -->
     <div class="table-card mb-4">
       <div class="card-title-header">
         <div class="card-title-icon">
           <?= svg_icon('plus', '', 20) ?>
         </div>
         <div class="card-title-text">
-          <h6>Add / Update Single Hall</h6>
+          <h6>Add or update hall</h6>
           <p>Configure bench rows and seats per desk for this hall.</p>
         </div>
       </div>
@@ -196,55 +192,53 @@ $rooms = $stmt->fetchAll();
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label" for="room_no">Hall Number</label>
-            <input name="room_no" id="room_no" class="form-control" placeholder="e.g. 101" value="101" required>
+            <label class="form-label" for="room_no">Hall number</label>
+            <input name="room_no" id="room_no" class="form-control" placeholder="e.g. 101" required>
           </div>
           <div class="col-md-6">
-            <label class="form-label" for="block">Block / Building</label>
+            <label class="form-label" for="block">Block or building</label>
             <input name="block" id="block" class="form-control" placeholder="e.g. Main Block" value="Main Academic Block">
           </div>
           <div class="col-6">
-            <label class="form-label" for="rowsIn">Rows (Benches)</label>
+            <label class="form-label" for="rowsIn">Rows (benches)</label>
             <input name="rows_count" id="rowsIn" type="number" min="1" max="100" class="form-control" value="15" required oninput="calcCap()">
           </div>
           <div class="col-6">
-            <label class="form-label" for="colsIn">Seats / Bench</label>
+            <label class="form-label" for="colsIn">Seats / bench</label>
             <input name="cols_count" id="colsIn" type="number" min="1" max="20" class="form-control" value="2" required oninput="calcCap()">
           </div>
         </div>
 
-        <!-- Highlighted Desk Chip (Point 23) -->
         <div class="d-flex justify-content-between align-items-center my-3">
           <div class="cap-highlight-chip" id="capPreview">
             <span class="cap-dot"></span>
             <span>Total: <strong id="capTotalNum">30</strong> desks</span>
             <span class="cap-calc-sub text-muted small">(<span id="capRowsNum">15</span> rows × <span id="capColsNum">2</span> seats)</span>
           </div>
-          <span class="text-muted small">Real-time Layout</span>
+          <span class="text-muted small">Layout preview</span>
         </div>
 
-        <!-- Live Desk Grid Preview (Point 24) -->
         <div class="mini-grid-container mb-3" id="miniGridContainer">
           <div class="small fw-semibold text-muted mb-2 text-center">
-            Classroom Desk Arrangement Preview
+            Classroom desk preview
           </div>
           <div class="mini-grid-layout" id="miniGridLayout"></div>
         </div>
 
         <button class="btn btn-grad w-100 py-2.5">
-          <?= svg_icon('plus', 'me-1', 16) ?>Save Hall Layout
+          <?= svg_icon('plus', 'me-1', 16) ?>Save hall layout
         </button>
       </form>
     </div>
 
-    <!-- Batch Room Creator (Points 25) -->
+    <!-- Batch Room Creator -->
     <div class="table-card">
       <div class="card-title-header">
         <div class="card-title-icon">
           <?= svg_icon('grid', '', 20) ?>
         </div>
         <div class="card-title-text">
-          <h6>Batch Create Exam Halls</h6>
+          <h6>Batch create halls</h6>
           <p>Quickly provision multiple exam halls with uniform layouts.</p>
         </div>
       </div>
@@ -254,79 +248,80 @@ $rooms = $stmt->fetchAll();
         <input type="hidden" name="action" value="batch">
         <div class="row g-3 mb-2">
           <div class="col-6">
-            <label class="form-label" for="bCount">No. of Rooms</label>
-            <input name="batch_rooms" id="bCount" type="number" min="1" max="5000" class="form-control" value="1000" required oninput="calcBatch()">
+            <label class="form-label" for="bCount">Number of rooms</label>
+            <input name="batch_rooms" id="bCount" type="number" min="1" max="5000" class="form-control" value="10" required oninput="calcBatch()">
           </div>
           <div class="col-6">
-            <label class="form-label" for="bStartNo">Start Room No</label>
+            <label class="form-label" for="bStartNo">Starting room number</label>
             <input name="batch_start_no" id="bStartNo" type="number" class="form-control" value="101" required oninput="calcBatch()">
           </div>
         </div>
 
-        <!-- Styled Brand Pills for Presets (Point 25) -->
         <div class="d-flex gap-1.5 flex-wrap my-2">
-          <button type="button" class="preset-pill" onclick="setBatchPreset(1000, 15, 2)">1,000 Halls</button>
-          <button type="button" class="preset-pill" onclick="setBatchPreset(500, 15, 2)">500 Halls</button>
-          <button type="button" class="preset-pill" onclick="setBatchPreset(100, 15, 2)">100 Halls</button>
-          <button type="button" class="preset-pill" onclick="setBatchPreset(20, 15, 2)">20 Halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(1000, 15, 2)">1,000 halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(500, 15, 2)">500 halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(100, 15, 2)">100 halls</button>
+          <button type="button" class="preset-pill" onclick="setBatchPreset(20, 15, 2)">20 halls</button>
         </div>
 
         <div class="mb-3">
-          <label class="form-label" for="bBlock">Block Name</label>
+          <label class="form-label" for="bBlock">Block name</label>
           <input name="batch_block" id="bBlock" class="form-control" value="Campus Exam Complex" oninput="calcBatch()">
         </div>
 
         <div class="row g-3 mb-3">
           <div class="col-6">
-            <label class="form-label" for="bRows">Rows / Room</label>
+            <label class="form-label" for="bRows">Rows / room</label>
             <input name="batch_rows" id="bRows" type="number" min="1" max="100" class="form-control" value="15" required oninput="calcBatch()">
           </div>
           <div class="col-6">
-            <label class="form-label" for="bCols">Seats / Bench</label>
+            <label class="form-label" for="bCols">Seats / bench</label>
             <input name="batch_cols" id="bCols" type="number" min="1" max="20" class="form-control" value="2" required oninput="calcBatch()">
           </div>
         </div>
 
-        <!-- Confirmation Summary Box (Point 25) -->
         <div class="p-2.5 mb-3 bg-light rounded-3 border small" id="batchSummaryBox">
-          Provision <strong>1,000 halls</strong> (101–1100) in <strong>Campus Exam Complex</strong> with 30 desks/room (Total: 30,000 desks).
+          Provision <strong>10 halls</strong> (101–110) in <strong>Campus Exam Complex</strong> with 30 desks/room (Total: 300 desks).
         </div>
 
-        <button class="btn btn-outline-primary w-100 py-2">
-          <?= svg_icon('grid', 'me-1.5', 16) ?>Create Batch Halls
+        <button class="btn btn-outline-secondary w-100 py-2">
+          <?= svg_icon('grid', 'me-1.5', 16) ?>Create batch halls
         </button>
       </form>
     </div>
   </div>
 
-  <!-- Right Side: Rooms Table & Toolbar (Point 28, 29, 30) -->
+  <!-- Right Side: Rooms Table -->
   <div class="col-lg-7">
     <div class="table-card">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0">Configured Examination Halls</h6>
+        <h6 class="fw-bold mb-0">Configured halls</h6>
         <span class="text-muted small">
-          Page <?= $page ?> of <?= max(1, $totalPages) ?> (<?= number_format($filteredCount) ?> halls)
+          Showing <?= number_format($filteredCount > 0 ? $offset + 1 : 0) ?>–<?= number_format(min($filteredCount, $offset + $perPage)) ?> of <?= number_format($filteredCount) ?>
         </span>
       </div>
 
-      <!-- Toolbar Row (Point 28) -->
+      <!-- Toolbar Row -->
       <form class="table-toolbar-row" method="get">
         <div class="toolbar-search">
-          <input name="q" value="<?= htmlspecialchars($q) ?>" class="form-control" placeholder="Search Hall No or Block…">
+          <input name="q" value="<?= htmlspecialchars($q) ?>" class="form-control" placeholder="Search hall number or block…">
         </div>
         <div class="toolbar-filters">
-          <select name="active" class="form-select" style="min-width: 140px;">
-            <option value="">All Statuses</option>
-            <option value="1" <?= $activeFilter === '1' ? 'selected' : '' ?>>Active Only</option>
-            <option value="0" <?= $activeFilter === '0' ? 'selected' : '' ?>>Inactive Only</option>
+          <select name="active" class="form-select" style="min-width: 130px;">
+            <option value="">All statuses</option>
+            <option value="1" <?= $activeFilter === '1' ? 'selected' : '' ?>>Active only</option>
+            <option value="0" <?= $activeFilter === '0' ? 'selected' : '' ?>>Inactive only</option>
+          </select>
+          <select name="per_page" class="form-select" style="min-width: 90px;" onchange="this.form.submit()">
+            <option value="10" <?= $perPage === 10 ? 'selected' : '' ?>>10 / page</option>
+            <option value="25" <?= $perPage === 25 ? 'selected' : '' ?>>25 / page</option>
+            <option value="50" <?= $perPage === 50 ? 'selected' : '' ?>>50 / page</option>
+            <option value="100" <?= $perPage === 100 ? 'selected' : '' ?>>100 / page</option>
           </select>
           <button class="btn btn-grad py-1 px-3" style="height: 44px;">Filter</button>
-          <?php if ($q !== '' || $activeFilter !== ''): ?>
+          <?php if ($q !== '' || $activeFilter !== '' || $perPage !== 25): ?>
             <a href="rooms.php" class="btn btn-outline-secondary py-1 px-3 d-inline-flex align-items-center" style="height: 44px;">Reset</a>
           <?php endif; ?>
-        </div>
-        <div class="toolbar-count-badge ms-auto">
-          <?= number_format($filteredCount) ?> Hall(s)
         </div>
       </form>
 
@@ -357,7 +352,7 @@ $rooms = $stmt->fetchAll();
                   <?= (int)$r['capacity'] ?> desks
                 </span>
                 <?php if ($r['occupied'] > 0): ?>
-                  <span class="badge bg-warning-subtle text-warning-emphasis ms-1">
+                  <span class="badge" style="background:rgba(255,189,163,0.3); color:#9C4632; border:1px solid #FFBDA3; margin-left:4px;">
                     <?= (int)$r['occupied'] ?> seated
                   </span>
                 <?php endif; ?>
@@ -374,12 +369,8 @@ $rooms = $stmt->fetchAll();
               </td>
               <td class="text-end">
                 <button type="button" class="btn-action btn-action-delete"
-                        title="Delete Hall"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteRoomModal"
-                        data-id="<?= $r['id'] ?>"
-                        data-name="<?= htmlspecialchars($r['room_no'] . ' (' . $r['block'] . ')', ENT_QUOTES) ?>"
-                        data-occupied="<?= (int)$r['occupied'] ?>">
+                        title="Delete hall"
+                        onclick="openDeleteModal(<?= $r['id'] ?>, '<?= htmlspecialchars($r['room_no'], ENT_QUOTES) ?>', <?= (int)$r['occupied'] ?>)">
                   <?= svg_icon('trash', '', 15) ?>
                 </button>
               </td>
@@ -396,71 +387,56 @@ $rooms = $stmt->fetchAll();
         </table>
       </div>
 
-      <!-- Pagination (Point 29) -->
-      <?php if ($totalPages > 1): ?>
-        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-          <span class="small text-muted">
-            Showing <?= number_format($offset + 1) ?>–<?= number_format(min($filteredCount, $offset + $perPage)) ?> of <?= number_format($filteredCount) ?>
-          </span>
+      <!-- Pagination Footer -->
+      <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+        <span class="small text-muted">
+          Showing <?= number_format($filteredCount > 0 ? $offset + 1 : 0) ?>–<?= number_format(min($filteredCount, $offset + $perPage)) ?> of <?= number_format($filteredCount) ?>
+        </span>
+        <?php if ($totalPages > 1): ?>
           <nav>
             <ul class="pagination pagination-sm mb-0">
               <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $page - 1 ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Prev</a>
+                <a class="page-link" href="?page=<?= $page - 1 ?>&per_page=<?= $perPage ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Prev</a>
               </li>
               <li class="page-item active">
                 <span class="page-link"><?= $page ?> / <?= $totalPages ?></span>
               </li>
               <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $page + 1 ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Next</a>
+                <a class="page-link" href="?page=<?= $page + 1 ?>&per_page=<?= $perPage ?>&q=<?= urlencode($q) ?>&active=<?= urlencode($activeFilter) ?>">Next</a>
               </li>
             </ul>
           </nav>
-        </div>
-      <?php endif; ?>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Modal: Delete Confirmation Popup -->
-<div class="modal fade" id="deleteRoomModal" tabindex="-1" aria-labelledby="deleteRoomModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2" id="deleteRoomModalLabel">
-          <?= svg_icon('alert-triangle', '', 20) ?>
-          Delete Exam Hall
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" action="rooms.php">
-        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="id" id="deleteRoomId" value="">
-        <div class="modal-body py-3">
-          <p class="text-body mb-2">Are you sure you want to delete <strong id="deleteRoomName">this hall</strong>?</p>
-          <div id="unseatWarning" class="p-3 bg-danger-subtle rounded-3 text-danger small mb-2" style="display:none;">
-            <div class="fw-bold mb-1">
-              <?= svg_icon('alert-triangle', 'me-1', 15) ?>
-              <span id="unseatWarningText">Active Seated Students Found!</span>
-            </div>
-            <div>Deleting this hall will un-seat and displace these students from their examination timetable.</div>
-            <div class="form-check mt-2 pt-2 border-top border-danger-subtle">
-              <input class="form-check-input" type="checkbox" name="confirm_unseat" value="1" id="confirmUnseatCheck">
-              <label class="form-check-label fw-semibold" for="confirmUnseatCheck">
-                I understand and confirm un-seating these students
-              </label>
-            </div>
-          </div>
-          <div class="p-3 bg-secondary-subtle rounded-3 text-secondary small">
-            This will remove the room configuration from the system.
-          </div>
-        </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger px-3">Yes, Delete</button>
-        </div>
-      </form>
+<!-- DeskMap Delete Confirmation Dialog -->
+<div id="deleteModal" class="deskmap-modal-backdrop" style="display:none;">
+  <div class="deskmap-modal-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold m-0" style="color:var(--brand-red, #9C4632);">Delete exam hall</h5>
+      <button type="button" class="btn-close" onclick="closeDeleteModal()" aria-label="Close"></button>
     </div>
+    <form method="post" action="rooms.php">
+      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="id" id="deleteRoomId" value="">
+      <p id="deleteMessage" class="text-body mb-3">Deleting this hall will remove its configuration.</p>
+      <div id="deleteUnseatBox" class="p-3 rounded-3 mb-3" style="display:none; background:rgba(156,70,50,0.1); border:1px solid var(--brand-red,#9C4632); color:var(--brand-red,#9C4632);">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="confirm_unseat" value="1" id="confirmUnseatCheck">
+          <label class="form-check-label small fw-semibold" for="confirmUnseatCheck">
+            I understand and confirm un-seating these students
+          </label>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary px-3" onclick="closeDeleteModal()">Cancel</button>
+        <button type="submit" class="btn btn-danger px-3">Delete hall</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -468,31 +444,32 @@ $rooms = $stmt->fetchAll();
 document.addEventListener('DOMContentLoaded', () => {
   calcCap();
   calcBatch();
-
-  const deleteModal = document.getElementById('deleteRoomModal');
-  if (deleteModal) {
-    deleteModal.addEventListener('show.bs.modal', (event) => {
-      const btn = event.relatedTarget;
-      const occ = parseInt(btn.getAttribute('data-occupied') || '0', 10);
-      document.getElementById('deleteRoomId').value = btn.getAttribute('data-id');
-      document.getElementById('deleteRoomName').textContent = `"${btn.getAttribute('data-name')}"`;
-
-      const warn = document.getElementById('unseatWarning');
-      const warnTxt = document.getElementById('unseatWarningText');
-      const chk = document.getElementById('confirmUnseatCheck');
-      if (occ > 0) {
-        warn.style.display = 'block';
-        warnTxt.textContent = `Warning: ${occ} student(s) currently seated in this hall!`;
-        chk.required = true;
-        chk.checked = false;
-      } else {
-        warn.style.display = 'none';
-        chk.required = false;
-        chk.checked = false;
-      }
-    });
-  }
 });
+
+function openDeleteModal(id, roomNo, occupied) {
+  document.getElementById('deleteRoomId').value = id;
+  const msgEl = document.getElementById('deleteMessage');
+  const unseatBox = document.getElementById('deleteUnseatBox');
+  const unseatCheck = document.getElementById('confirmUnseatCheck');
+
+  if (occupied > 0) {
+    msgEl.innerHTML = `<strong>Deleting Hall ${roomNo} un-seats ${occupied} student${occupied === 1 ? '' : 's'}.</strong>`;
+    unseatBox.style.display = 'block';
+    unseatCheck.required = true;
+    unseatCheck.checked = false;
+  } else {
+    msgEl.textContent = `Deleting Hall ${roomNo} removes this hall configuration from the system.`;
+    unseatBox.style.display = 'none';
+    unseatCheck.required = false;
+    unseatCheck.checked = false;
+  }
+
+  document.getElementById('deleteModal').style.display = 'flex';
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal').style.display = 'none';
+}
 
 function renderMiniDeskGrid(rows, cols) {
   const container = document.getElementById('miniGridLayout');
