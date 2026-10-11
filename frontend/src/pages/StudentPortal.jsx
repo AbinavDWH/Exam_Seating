@@ -373,14 +373,14 @@ export default function StudentPortal() {
                 </span>
               </div>
 
-              {/* 2. Seat Number (Sturdy Serif Font) */}
+              {/* 2. Seat Number */}
               <div className="result-seat-box">
                 <span className="result-seat-label">Allocated Seat</span>
-                <div className="result-seat-number font-serif">
+                <div className="result-seat-number">
                   Seat #{currentSeat.bench_no || currentSeat.row_num}
                   {sideLabel && <span className="result-seat-side">({sideLabel})</span>}
                 </div>
-                <div className="result-seat-coords font-mono">
+                <div className="result-seat-coords">
                   Row {currentSeat.row_num} · Desk Column {currentSeat.col_num}
                 </div>
               </div>
@@ -393,14 +393,14 @@ export default function StudentPortal() {
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Exam Date</span>
-                  <span className="meta-value d-flex align-items-center gap-1">
+                  <span className="meta-value meta-value-row">
                     <Calendar size={15} />
                     {fmtDate(currentSeat.exam_date)}
                   </span>
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Start Time</span>
-                  <span className="meta-value d-flex align-items-center gap-1">
+                  <span className="meta-value meta-value-row">
                     <Clock size={15} />
                     {fmtTime(currentSeat.start_time)}
                   </span>
@@ -414,12 +414,12 @@ export default function StudentPortal() {
                 <div className="meta-item">
                   <span className="meta-label">Student</span>
                   <span className="meta-value">
-                    {currentSeat.name} <span className="font-mono text-muted">({currentSeat.roll_no})</span>
+                    {currentSeat.name} <span className="meta-roll">({currentSeat.roll_no})</span>
                   </span>
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Subject Code</span>
-                  <span className="meta-value font-mono">{currentSeat.exam_code}</span>
+                  <span className="meta-value">{currentSeat.exam_code}</span>
                 </div>
               </div>
 
@@ -427,19 +427,18 @@ export default function StudentPortal() {
               {room && (
                 <div className="result-room-section">
                   <div className="room-section-header">
-                    <h3 className="room-section-title font-serif">
+                    <h3 className="room-section-title">
                       Room Map — Hall {currentSeat.room_no}
                     </h3>
-                    <span className="room-section-meta font-mono">
-                      {room.rows_count} rows × {room.cols_count} desks/row
+                    <span className="room-section-meta">
+                      {(room.room || room).rows_count} rows × {(room.room || room).cols_count} seats per row
                     </span>
                   </div>
 
                   <RoomGrid
-                    room={room}
+                    room={room.room || room}
+                    seats={room.seats || []}
                     highlightRoll={currentSeat.roll_no}
-                    targetRow={currentSeat.row_num}
-                    targetCol={currentSeat.col_num}
                   />
                 </div>
               )}

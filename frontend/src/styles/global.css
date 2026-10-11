@@ -936,3 +936,149 @@ button, input, select, textarea {
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3, h4, h5, h6 { font-weight: 700; letter-spacing: -0.01em; }
 code, kbd, samp, pre { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+
+/* ======================================================================
+   Student portal: result screen and shared pieces
+   (these class names are used by StudentPortal.jsx)
+   ====================================================================== */
+
+/* Keep the footer at the bottom on short pages */
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+#root > main, .student-portal-wrapper { flex: 1 0 auto; }
+
+/* Demo chips (development builds only) */
+.quick-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--text);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.quick-chip-btn:hover { background: var(--bg-subtle); border-color: var(--text-muted); }
+
+/* Error message under the form */
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-control);
+  color: var(--danger-text);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.error-banner-icon { flex-shrink: 0; margin-top: 2px; }
+
+/* Result card */
+.student-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.result-core-hierarchy { display: flex; flex-direction: column; }
+
+/* 1. Hall and block */
+.result-hall-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 28px 28px 20px;
+}
+.result-hall-title {
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.result-block-subtitle {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* 2. Seat */
+.result-seat-box {
+  margin: 0 28px 24px;
+  padding: 18px 22px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-light);
+  border-left: 6px solid var(--primary);
+  border-radius: var(--radius-control);
+}
+.result-seat-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+.result-seat-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: clamp(2rem, 8vw, 3.1rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.result-seat-side { font-size: 1.1rem; font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
+.result-seat-coords { margin-top: 6px; font-size: 0.95rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* 3. Exam details */
+.result-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+  padding: 0 28px 28px;
+}
+.meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.meta-label { font-size: 0.78rem; font-weight: 600; color: var(--text-subtle); }
+.meta-value { font-size: 1rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.meta-value-row { display: flex; align-items: center; gap: 8px; }
+.meta-roll { font-weight: 500; color: var(--text-muted); }
+.report-by-highlight {
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: var(--primary);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+/* 4. Room map */
+.result-room-section { padding: 24px 28px 28px; border-top: 1px solid var(--border); }
+.room-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 14px;
+}
+.room-section-title { margin: 0; font-size: 1.15rem; }
+.room-section-meta { font-size: 0.85rem; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+
+/* Phones */
+@media (max-width: 560px) {
+  .student-portal-wrapper { padding: 20px 0 40px; }
+  .student-search-card { padding: 18px; }
+  .form-fields-grid { grid-template-columns: 1fr; }
+  .btn-find-seat { width: 100%; min-height: 48px; }
+  .field-input { min-height: 48px; }
+  .result-hall-block { padding: 22px 18px 16px; }
+  .result-seat-box { margin: 0 18px 20px; padding: 16px 18px; }
+  .result-meta-grid { grid-template-columns: 1fr; gap: 16px; padding: 0 18px 22px; }
+  .result-room-section { padding: 20px 14px 22px; }
+  .result-actions-row { flex-direction: column; }
+  .action-btn { width: 100%; justify-content: center; min-height: 48px; }
+}
