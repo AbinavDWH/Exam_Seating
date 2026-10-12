@@ -67,7 +67,9 @@ This concurrently starts:
 - **Username**: `admin`
 - **Password**: `Admin@123`
 
-### Sample Student Register Numbers (CAT I - Slot I Dataset)
+### Sample Student Register Numbers
+
+#### CAT I - Slot I (03.09.2026 Dataset)
 | Register No | Name | Department | Semester / Year | Hall No | Subject Code |
 |---|---|---|---|---|---|
 | `2116241801001` | Vishal Rajan | AI&DS | Sem 5 (3rd Year) | ANEW101 | AD23532 |
@@ -77,6 +79,15 @@ This concurrently starts:
 | `2116251401001` | Bala Balakrishnan | CSBS | Sem 3 (2nd Year) | A204 | MC23313 |
 | `2116241101001` | Vasanth H. | MECH | Sem 5 (3rd Year) | B426 | ME23511 |
 | `2116240901001` | Shiva G. | EEE | Sem 5 (3rd Year) | C202 | EE23531 |
+
+#### CAT I - Slot I (19.09.2026 Dataset — 5 Col × 9 Row Layout)
+| Register No | Name | Department | Semester / Year | Hall No | Subject Code |
+|---|---|---|---|---|---|
+| `2116250801001` | Sharmila J. | ECE | Sem 3 (2nd Year) | C307 | EC23312 |
+| `2116240401001` | Vasanth K. | BT | Sem 5 (3rd Year) | C307 | BT23512 |
+| `2116250801028` | Preethi Choudhary | ECE | Sem 3 (2nd Year) | B107 | EC23312 |
+| `2116240401028` | Preethi Verma | BT | Sem 5 (3rd Year) | B107 | BT23512 |
+| `2116250801055` | Archana S. | ECE | Sem 3 (2nd Year) | B218 | EC23312 |
 *(Students can find their allocated seat using their roll number alone)*
 
 ---

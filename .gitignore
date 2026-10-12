@@ -59,7 +59,8 @@ coverage/
 *.pem
 .sass-cache/
 
-*/_pycache/*
+__pycache__/
+*.pyc
 
 .agents/*
 .agent/*
@@ -71,3 +72,5 @@ skills
 
 CAT I HP II  III YEAR - 03.09.26.xlsx - SLOT I.csv
 CAT I HP II & III YEAR - 03.09.26.xlsx - SLOT I.csv
+CAT I HP II  III YEAR - 19.09.26.xlsx - SLOT I.csv
+CAT I HP II & III YEAR - 19.09.26.xlsx - SLOT I.csv

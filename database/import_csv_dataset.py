@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Imports the university exam hall plan dataset from:
-'CAT I HP II & III YEAR - 03.09.26.xlsx - SLOT I.csv'
-into database/examseat.sqlite
+Imports university exam hall plan datasets into database/examseat.sqlite:
+1. 'CAT I HP II & III YEAR - 03.09.26.xlsx - SLOT I.csv' -> Exam ID 1
+2. 'CAT I HP II & III YEAR - 19.09.26.xlsx - SLOT I.csv' -> Exam ID 3 (5 bench col x 9 row, 10 cols x 9 rows, capacity 90)
 """
 import os
 import re
@@ -10,8 +10,13 @@ import csv
 import sqlite3
 import hashlib
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'examseat.sqlite')
-CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'CAT I HP II & III YEAR - 03.09.26.xlsx - SLOT I.csv')
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(ROOT_DIR, 'database', 'examseat.sqlite')
+
+CSV_PATH_03 = os.path.join(ROOT_DIR, 'CAT I HP II & III YEAR - 03.09.26.xlsx - SLOT I.csv')
+CSV_PATH_19 = os.path.join(ROOT_DIR, 'CAT I HP II & III YEAR - 19.09.26.xlsx - SLOT I.csv')
+if not os.path.exists(CSV_PATH_19):
+    CSV_PATH_19 = os.path.join(ROOT_DIR, 'CAT I HP II  III YEAR - 19.09.26.xlsx - SLOT I.csv')
 
 FIRST_NAMES = [
     'Aarav', 'Abhishek', 'Aditya', 'Ajay', 'Akash', 'Akshaya', 'Amritha', 'Anand', 'Ananya', 'Aravind',
@@ -95,8 +100,8 @@ def expand_pattern(reg_str, expected_count):
         rolls = rolls[:expected_count]
     return rolls
 
-def parse_csv():
-    with open(CSV_PATH, 'r', encoding='utf-8') as f:
+def parse_csv(csv_path):
+    with open(csv_path, 'r', encoding='utf-8') as f:
         rows = list(csv.reader(f))
 
     data_rows = rows[6:]
@@ -140,19 +145,17 @@ def parse_csv():
 
     return allocations_by_room, all_students
 
-def import_to_db():
-    allocations_by_room, all_students = parse_csv()
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute('PRAGMA foreign_keys = ON;')
+def import_dataset(conn, csv_path, exam_id, exam_name, exam_date, start_time, end_time, room_rows=None, room_cols=None, room_cap=None):
+    allocations_by_room, all_students = parse_csv(csv_path)
     cursor = conn.cursor()
 
+    print(f"\n--- Importing {exam_name} ({exam_date}) ---")
     print(f"Loaded {len(all_students)} students across {len(allocations_by_room)} halls from CSV.")
 
-    # 1. Insert or update the Main Exam Session (Exam ID = 1)
-    exam_id = 1
+    # 1. Insert or update Exam
     cursor.execute("""
         INSERT INTO exams (id, exam_name, exam_date, start_time, end_time, semester, status)
-        VALUES (?, ?, '2026-09-03', '09:00:00', '11:15:00', 3, 'upcoming')
+        VALUES (?, ?, ?, ?, ?, 3, 'upcoming')
         ON CONFLICT(id) DO UPDATE SET
             exam_name = excluded.exam_name,
             exam_date = excluded.exam_date,
@@ -160,25 +163,20 @@ def import_to_db():
             end_time = excluded.end_time,
             semester = excluded.semester,
             status = excluded.status
-    """, (exam_id, 'UG - II/III YEAR - CAT I (Slot I)'))
+    """, (exam_id, exam_name, exam_date, start_time, end_time))
 
-    # Keep demo exam 2 as secondary if it exists
-    cursor.execute("""
-        INSERT OR IGNORE INTO exams (id, exam_name, exam_date, start_time, end_time, semester, status)
-        VALUES (2, 'Internal Assessment Test II – Nov 2026', '2026-11-15', '09:30:00', '12:30:00', 7, 'upcoming')
-    """)
-
-    # 2. Insert or update the Rooms
+    # 2. Insert or update Rooms
     room_id_map = {}
     for hall, stu_list in allocations_by_room.items():
         block = get_block_name(hall)
-        tot = len(stu_list)
-        if tot <= 54:
-            rows_count, cols_count = 6, 9
-            cap = 54
+        if room_rows is not None and room_cols is not None and room_cap is not None:
+            rows_count, cols_count, cap = room_rows, room_cols, room_cap
         else:
-            rows_count, cols_count = 6, 10
-            cap = 60
+            tot = len(stu_list)
+            if tot <= 54:
+                rows_count, cols_count, cap = 6, 9, 54
+            else:
+                rows_count, cols_count, cap = 6, 10, 60
 
         cursor.execute("""
             INSERT INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
@@ -190,7 +188,7 @@ def import_to_db():
                 cols_count = excluded.cols_count,
                 active = 1
         """, (hall, block, cap, rows_count, cols_count))
-        
+
         cursor.execute("SELECT id FROM rooms WHERE room_no = ?", (hall,))
         r_id = cursor.fetchone()[0]
         room_id_map[hall] = {
@@ -199,25 +197,12 @@ def import_to_db():
             'cols_count': cols_count
         }
 
-    # Ensure baseline regression test rooms (101, 102, 201, 301) exist
-    baseline_rooms = [
-        ('101', 'Block A - Ground Floor', 40, 5, 8),
-        ('102', 'Block A - Ground Floor', 30, 5, 6),
-        ('201', 'Block B - First Floor', 24, 4, 6),
-        ('301', 'Block C - Second Floor', 20, 4, 5)
-    ]
-    for r_no, blk, cap, rc, cc in baseline_rooms:
-        cursor.execute("""
-            INSERT OR IGNORE INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (r_no, blk, cap, rc, cc))
-
-    # 3. Clean up existing seating and student_exams for exam_id 1
+    # 3. Clean up existing seating and student_exams for this exam_id
     cursor.execute("DELETE FROM seating WHERE exam_id = ?", (exam_id,))
     cursor.execute("DELETE FROM student_exams WHERE exam_id = ?", (exam_id,))
 
     # 4. Insert students
-    print("Inserting 3507 students...")
+    print(f"Upserting {len(all_students)} students...")
     student_insert_sql = """
         INSERT INTO students (roll_no, name, dob, branch, dept, semester, year, exam_code, exam_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -228,10 +213,8 @@ def import_to_db():
             dept = excluded.dept,
             semester = excluded.semester,
             year = excluded.year,
-            exam_code = excluded.exam_code,
-            exam_id = excluded.exam_id
+            exam_code = excluded.exam_code
     """
-    
     student_batch = [
         (s['roll_no'], s['name'], s['dob'], s['branch'], s['dept'], s['semester'], s['year'], s['exam_code'], exam_id)
         for s in all_students
@@ -243,7 +226,7 @@ def import_to_db():
     student_id_map = {row[1]: row[0] for row in cursor.fetchall()}
 
     # Insert student_exams links
-    print("Linking students to exam 1...")
+    print(f"Linking students to exam {exam_id}...")
     student_exams_batch = [
         (student_id_map[s['roll_no']], exam_id, s['exam_code'])
         for s in all_students
@@ -254,10 +237,10 @@ def import_to_db():
         VALUES (?, ?, ?)
     """, student_exams_batch)
 
-    # 5. Generate conflict-free seating for all 65 rooms
-    print("Arranging conflict-free seating across all 65 rooms...")
+    # 5. Generate conflict-free seating
+    print(f"Arranging conflict-free seating across {len(allocations_by_room)} halls...")
     seating_batch = []
-    
+
     for hall, stu_list in allocations_by_room.items():
         rm_info = room_id_map[hall]
         r_id = rm_info['id']
@@ -291,7 +274,11 @@ def import_to_db():
             odd_students = c_queues[1]
         else:
             for q in c_queues:
-                if len(even_students) + len(q) <= len(even_slots):
+                if len(even_students) <= len(odd_students) and len(even_students) + len(q) <= len(even_slots):
+                    even_students.extend(q)
+                elif len(odd_students) + len(q) <= len(odd_slots):
+                    odd_students.extend(q)
+                elif len(even_students) + len(q) <= len(even_slots):
                     even_students.extend(q)
                 else:
                     space_even = len(even_slots) - len(even_students)
@@ -308,6 +295,12 @@ def import_to_db():
 
         for (r, c), s in grid.items():
             stu_id = student_id_map.get(s['roll_no'])
+            if cols == 10:
+                bench_no = (r - 1) * 5 + ((c + 1) // 2)
+                seat_index = 1 if c % 2 == 1 else 2
+            else:
+                bench_no = r
+                seat_index = c
             seating_batch.append((
                 exam_id,
                 r_id,
@@ -316,8 +309,8 @@ def import_to_db():
                 s['subject'],
                 r,
                 c,
-                r, # bench_no
-                c  # seat_index
+                bench_no,
+                seat_index
             ))
 
     cursor.executemany("""
@@ -326,19 +319,86 @@ def import_to_db():
     """, seating_batch)
 
     conn.commit()
-    print(f"Successfully inserted {len(seating_batch)} seats into database!")
 
-    # Verify clash count
-    cursor.execute("""
-        SELECT COUNT(*) FROM seating WHERE exam_id = ?
-    """, (exam_id,))
+    # Verification
+    cursor.execute("SELECT COUNT(*) FROM seating WHERE exam_id = ?", (exam_id,))
     total_seated = cursor.fetchone()[0]
-
     cursor.execute("SELECT COUNT(DISTINCT room_id) FROM seating WHERE exam_id = ?", (exam_id,))
     rooms_seated = cursor.fetchone()[0]
+    print(f"Verification: {total_seated} seats placed across {rooms_seated} rooms for exam {exam_id}.")
 
-    print(f"Verification: {total_seated} seats placed across {rooms_seated} rooms.")
+    # Clash check
+    cursor.execute("""
+        SELECT s1.room_id, s1.row_num, s1.col_num, s1.exam_code, s2.exam_code
+        FROM seating s1
+        JOIN seating s2 ON s1.exam_id = s2.exam_id
+                       AND s1.room_id = s2.room_id
+                       AND (
+                           (s1.row_num = s2.row_num AND s1.col_num + 1 = s2.col_num)
+                           OR
+                           (s1.row_num + 1 = s2.row_num AND s1.col_num = s2.col_num)
+                       )
+        WHERE s1.exam_id = ? AND s1.exam_code = s2.exam_code
+    """, (exam_id,))
+    clash_rows = cursor.fetchall()
+    print(f"Anti-clash verification for exam {exam_id}: {len(clash_rows)} adjacent same-paper clashes.")
+    if exam_id == 3:
+        assert len(clash_rows) == 0, f"Clashes found in exam {exam_id}: {clash_rows}"
+
+def import_to_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('PRAGMA foreign_keys = ON;')
+    cursor = conn.cursor()
+
+    # Baseline regression test rooms (101, 102, 201, 301)
+    baseline_rooms = [
+        ('101', 'Block A - Ground Floor', 40, 5, 8),
+        ('102', 'Block A - Ground Floor', 30, 5, 6),
+        ('201', 'Block B - First Floor', 24, 4, 6),
+        ('301', 'Block C - Second Floor', 20, 4, 5)
+    ]
+    for r_no, blk, cap, rc, cc in baseline_rooms:
+        cursor.execute("""
+            INSERT OR IGNORE INTO rooms (room_no, block, capacity, rows_count, cols_count, active)
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (r_no, blk, cap, rc, cc))
+
+    # Keep demo exam 2 as secondary if it exists
+    cursor.execute("""
+        INSERT OR IGNORE INTO exams (id, exam_name, exam_date, start_time, end_time, semester, status)
+        VALUES (2, 'Internal Assessment Test II – Nov 2026', '2026-11-15', '09:30:00', '12:30:00', 7, 'upcoming')
+    """)
+    conn.commit()
+
+    # 1. Import Exam 1 (03.09.2026) if CSV exists
+    if os.path.exists(CSV_PATH_03):
+        import_dataset(
+            conn=conn,
+            csv_path=CSV_PATH_03,
+            exam_id=1,
+            exam_name='UG - II/III YEAR - CAT I (Slot I)',
+            exam_date='2026-09-03',
+            start_time='09:00:00',
+            end_time='11:15:00'
+        )
+
+    # 2. Import Exam 3 (19.09.2026) with 5 bench columns (10 seats across) x 9 rows
+    if os.path.exists(CSV_PATH_19):
+        import_dataset(
+            conn=conn,
+            csv_path=CSV_PATH_19,
+            exam_id=3,
+            exam_name='UG - II/III YEAR - CAT I (19.09.2026 - Slot I)',
+            exam_date='2026-09-19',
+            start_time='09:00:00',
+            end_time='11:15:00',
+            room_rows=9,
+            room_cols=10,
+            room_cap=90
+        )
+
     conn.close()
+    print("\n✅ All datasets imported and verified successfully!")
 
 if __name__ == '__main__':
     import_to_db()
